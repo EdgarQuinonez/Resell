@@ -6,8 +6,6 @@ local gRs_Buy_BuyoutPrice;
 local gRs_Buy_ItemName;
 local gRs_Buy_StackSize;
 local gRs_Buy_PreviousNumBought = 0;
-local gRs_Craft_CraftCost;
-
 
 -- Flags
 local tradeSkillFirstShown = true
@@ -23,7 +21,8 @@ Resell.UTILS = {}
 local defaults = {
 	global = {
 		["ResellItemDatabase"] = {},
-		["ResellProductDatabase"] = {},
+		-- ["ResellProductDatabase"] = {},
+		["ResellTradeSkillSkillsDatabase"] = {}
 	}
 }
 
@@ -39,6 +38,7 @@ function Resell:OnInitialize()
 	-- self:RegisterEvent("AUCTION_HOUSE_CLOSE", "KillAuctionHouse")
 	self:RegisterEvent("AUCTION_HOUSE_SHOW", "OnAuctionHouseShow")
 	self:RegisterMessage("RS_TRADE_SKILL_SKILL_CHANGE", "OnSkillChange")
+	self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnCraft")
 	self:SetupHookFunctions()
 	self:Print("Resell is initialized.")
 end
@@ -53,6 +53,7 @@ function Resell:OnTradeSkillShow()
 		for i=1,GetNumTradeSkills()
 		do
 			local frame = _G["TradeSkillSkill"..i]
+			Resell.UTILS.AddTradeSkillSkill(i)
 			if frame then						
 				frame:HookScript("OnClick", function()
 					Resell:SendMessage("RS_TRADE_SKILL_SKILL_CHANGE")
@@ -61,6 +62,15 @@ function Resell:OnTradeSkillShow()
 		end
 		tradeSkillFirstShown = false
 	end
+end
+
+function Resell.UTILS.AddTradeSkillSkill(skillIndex)
+	local skillName = GetTradeSkillInfo(skillIndex)
+
+	if not Resell.db.global["ResellTradeSkillSkillsDatabase"][skillName] then
+		Resell.db.global["ResellTradeSkillSkillsDatabase"][skillName] = {}
+	end
+
 end
 
 function Resell:OnAuctionHouseShow()	
@@ -157,17 +167,22 @@ function Resell.DBOperation.RegisterCraft()
 	local productName = GetItemInfo(craftedProductLink)
 	local minMade, maxMade = GetTradeSkillNumMade(skillIndex) -- if its random there is no way to know how many were exactly made.
 	local craftCost = Resell:CalculateCraftCost(skillIndex) -- making it a little bit more expensive, maybe consider using global variable that hold this when OnSkillChange happens.
-	
+	-- serviceType = nill -> produces an item
+	local _, _, _, _, serviceType = GetTradeSkillInfo(skillIndex)
+
+
 	local nReagents = GetTradeSkillNumReagents(skillIndex)
 	for reagentIndex = 1,nReagents
 	do
 		-- local itemLink = GetTradeSkillReagentItemLink(skillIndex, reagentIndex)
 		local reagentName, reagentTexture, reagentCount, playerReagentCount = GetTradeSkillReagentInfo(skillIndex, reagentIndex)
 				
-		Resell.DBOperation.UpdateItem(reagentName, -reagentCount, 1)
+		Resell.DBOperation.UpdateItem(reagentName, -reagentCount, 1, nil, playerReagentCount)
 	end
-
-	Resell.DBOperation.UpdateProduct(productName, 1, minMade, craftCost)	
+	-- Resell:Print(serviceType)
+	if not serviceType then		
+		Resell.DBOperation.UpdateItem(productName, minMade, 1, craftCost)
+	end
 end
 
 function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, playerReagentCount)
@@ -197,7 +212,6 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, player
 	local previousPrice = itemTable[itemName]["price"]
 	
 	local newCount = previousCount + count * stackSize
-	-- TODO: Care for newCount == 0
 	if newCount <= 0 then
 		-- player no longer has item, reset both price and count to 0
 		itemTable[itemName]["playerItemCount"] = 0
@@ -211,21 +225,12 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, player
 	itemTable[itemName]["price"] = math.floor(newPrice)
 end
 
-function Resell.DBOperation.UpdateProduct(productName, count, stackSize, craftCost)
-	local productTable = Resell.db.global["ResellProductDatabase"]
-	Resell:Print(productName)
-	if not productTable[productName] then
-		productTable[productName] = {}
-		productTable[productName]["craftCost"] = 0
-	end
-	
-end
-
-
 function Resell:OnBuyout()
 	Resell.DBOperation.RegisterPurchase()
 end
 
-function Resell:OnCraft()
-	Resell.DBOperation.RegisterCraft()
+function Resell:OnCraft(event, unit, name)
+	if Resell.db.global["ResellTradeSkillSkillsDatabase"][name] then		
+		Resell.DBOperation.RegisterCraft()
+	end
 end
