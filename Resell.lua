@@ -45,6 +45,7 @@ end
 
 function Resell:SetupHookFunctions()
 	Resell:Atr_Buy_ConfirmOK_OnClick_Listener()
+	Resell:Atr_Scan_FullScanDone_OnClick_Listener()
 	-- Resell:Atr_Buy1_OnClick_Listener() -- frame is nill
 end
 
@@ -65,9 +66,9 @@ function Resell:OnTradeSkillShow()
 end
 
 function Resell.UTILS.AddTradeSkillSkill(skillIndex)
-	local skillName = GetTradeSkillInfo(skillIndex)
+	local skillName, skillType = GetTradeSkillInfo(skillIndex)
 
-	if not Resell.db.global["ResellTradeSkillSkillsDatabase"][skillName] then
+	if skillType ~= "header" and not Resell.db.global["ResellTradeSkillSkillsDatabase"][skillName] then
 		Resell.db.global["ResellTradeSkillSkillsDatabase"][skillName] = {}
 	end
 
@@ -102,6 +103,22 @@ function Resell:Atr_Buy1_OnClick_Listener()
 	end
 end
 
+function Resell:Atr_Scan_FullScanDone_OnClick_Listener()
+	local doneBtnFrame = _G["Atr_FullScanDone"]
+	if doneBtnFrame then
+		doneBtnFrame:HookScript("OnClick", function ()
+			Resell:UpdateScannedPriceOnItemDatabase()
+		end)
+	end
+end
+
+function Resell:UpdateScannedPriceOnItemDatabase()
+	for itemName, _ in pairs(Resell.db.global["ResellItemDatabase"])
+	do
+		Resell.db.global["ResellItemDatabase"][itemName]["scannedPrice"] = GetItemScannedPrice(itemName)
+	end
+end
+
 function Resell:OnEnable()
 	-- Called when the addon is enabled
 end
@@ -118,33 +135,46 @@ function Resell:CalculateCraftCost(skillIndex)
 	for reagentIndex = 1,nReagents
 	do
 		local itemLink = GetTradeSkillReagentItemLink(skillIndex, reagentIndex)
-		local reagentName, reagentTexture, reagentCount, playerReagentCount = GetTradeSkillReagentInfo(skillIndex, reagentIndex)
+		local reagentName, reagentTexture, reagentCount, playerReagentCount = GetTradeSkillReagentInfo(skillIndex, reagentIndex)		
 		
-		if itemTable[reagentName] then
-			local item = itemTable[reagentName]
-			local price = item["price"]
+		if not itemTable[reagentName] then
+			itemTable[reagentName] = {}
+			itemTable[reagentName]["price"] = 0
+			itemTable[reagentName]["playerItemCount"] = playerReagentCount
 
-			total = total + price * reagentCount
+			itemTable[reagentName]["scannedPrice"] = GetItemScannedPrice(reagentName)						
+		end
+
+		local price;
+
+		if not itemTable[reagentName]["scannedPrice"] then
+			-- scannedPrice not available, price might be 0
+			price = itemTable[reagentName]["price"]
+		elseif itemTable[reagentName]["playerItemCount"] == 0 then
+			-- player does not have the item, scannedPrice is relevant.
+			price = itemTable[reagentName]["scannedPrice"]
+		elseif itemTable[reagentName]["playerItemCount"] > 0 and itemTable[reagentName]["price"] == 0 then
+			-- player does have the item, however price is 0 because it wasn't bought from AH, he might've farmed the item, still market price would be benefitial to tell if he can make a profit without crafting using the reagent.
+			price = itemTable[reagentName]["scannedPrice"]		
 		else
-			total = total -- missing data defaults to 0 TODO: use scan data values from auctionator instead.
-		end		
-	end
+			-- price stored in db is relevant
+			price = itemTable[reagentName]["price"]
+		end
 
+		total = total + price * reagentCount
+	end
 	return total
 end
 
 function Resell:OnSkillChange()
 	local skillIndex = GetTradeSkillSelectionIndex()
 	local craftCost = Resell:CalculateCraftCost(skillIndex)
-	if type(craftCost) == 'number' then		
-		local gold = math.floor(craftCost / (100 * 100))
-		local silver = math.floor(craftCost / 100) - (gold * 100)
-		local copper = craftCost - (silver * 100 + gold * 100 * 100)
 	
-		Resell:Printf("Craft Cost: %d gold %d silver %d copper.", gold, silver, copper)
-	else
-		Resell:Print(craftCost)
-	end
+	local gold = math.floor(craftCost / (100 * 100))
+	local silver = math.floor(craftCost / 100) - (gold * 100)
+	local copper = craftCost - (silver * 100 + gold * 100 * 100)
+
+	Resell:Printf("Craft Cost: %d gold %d silver %d copper.", gold, silver, copper)	
 end
 
 
@@ -156,8 +186,7 @@ function Resell.DBOperation.RegisterPurchase()
 
 	local numBoughtThisRound = gRs_Buy_NumBought - gRs_Buy_PreviousNumBought
 	gRs_Buy_PreviousNumBought = gRs_Buy_NumBought
-		
-
+			
 	Resell.DBOperation.UpdateItem(gRs_Buy_ItemName, numBoughtThisRound, gRs_Buy_StackSize, gRs_Buy_BuyoutPrice)	
 end
 
@@ -178,8 +207,7 @@ function Resell.DBOperation.RegisterCraft()
 		local reagentName, reagentTexture, reagentCount, playerReagentCount = GetTradeSkillReagentInfo(skillIndex, reagentIndex)
 				
 		Resell.DBOperation.UpdateItem(reagentName, -reagentCount, 1, nil, playerReagentCount)
-	end
-	-- Resell:Print(serviceType)
+	end	
 	if not serviceType then		
 		Resell.DBOperation.UpdateItem(productName, minMade, 1, craftCost)
 	end
@@ -192,6 +220,7 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, player
 		itemTable[itemName] = {}
 		itemTable[itemName]["price"] = 0
 		itemTable[itemName]["playerItemCount"] = 0
+		itemTable[itemName]["scannedPrice"] = GetItemScannedPrice(itemName)
 		if playerReagentCount then
 			-- if update comes from craft, use the playerReagenCount to avoid negative numbers in item db.
 			itemTable[itemName]["playerItemCount"] = playerReagentCount		
@@ -209,7 +238,11 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, player
 	end
 
 	local previousCount = itemTable[itemName]["playerItemCount"]
-	local previousPrice = itemTable[itemName]["price"]
+	local previousPrice = itemTable[itemName]["price"] -- might be 0
+
+	if itemTable[itemName]["scannedPrice"] and previousPrice == 0 then
+		previousPrice = itemTable[itemName]["scannedPrice"]
+	end
 	
 	local newCount = previousCount + count * stackSize
 	if newCount <= 0 then
@@ -230,7 +263,7 @@ function Resell:OnBuyout()
 end
 
 function Resell:OnCraft(event, unit, name)
-	if Resell.db.global["ResellTradeSkillSkillsDatabase"][name] then		
+	if unit == "player" and Resell.db.global["ResellTradeSkillSkillsDatabase"][name] then		
 		Resell.DBOperation.RegisterCraft()
 	end
 end

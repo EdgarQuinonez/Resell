@@ -30,7 +30,7 @@ Libs\AceSerializer-3.0\AceSerializer-3.0.xml
 # ..\Auctionator\Locales\svSE.lua
 # ..\Auctionator\Locales\esES.lua
 
-..\Auctionator\zcUtils.lua
+# ..\Auctionator\zcUtils.lua
 
 # ..\Auctionator\Auctionator.lua
 # ..\Auctionator\AuctionatorShop.lua
@@ -39,13 +39,13 @@ Libs\AceSerializer-3.0\AceSerializer-3.0.xml
 
 # ..\Auctionator\AuctionatorLocalize.lua
 # ..\Auctionator\AuctionatorPane.lua
-..\Auctionator\AuctionatorScan.lua
+# ..\Auctionator\AuctionatorScan.lua
 # ..\Auctionator\AuctionatorQuery.lua
 # ..\Auctionator\AuctionatorHints.lua
 # ..\Auctionator\AuctionatorVendor.lua
 # ..\Auctionator\AuctionatorConflicts.lua
 # ..\Auctionator\AuctionatorConfig.lua
-..\Auctionator\AuctionatorBuy.lua
+# ..\Auctionator\AuctionatorBuy.lua
 ..\Auctionator\AuctionatorAPI.lua
 
 # ..\Auctionator\AuctionatorConfig.xml
