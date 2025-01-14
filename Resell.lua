@@ -10,7 +10,7 @@ local gRs_Buy_PreviousNumBought = 0;
 -- Flags
 local tradeSkillFirstShown = true
 local auctionHouseFirstShown = true
--- local TradeSkillFrame = _G["TradeSkillFrame"]
+local mailFirstShown = true
 
 Resell = LibStub("AceAddon-3.0"):NewAddon("Resell", "AceConsole-3.0", "AceEvent-3.0")
 
@@ -39,6 +39,8 @@ function Resell:OnInitialize()
 	self:RegisterEvent("AUCTION_HOUSE_SHOW", "OnAuctionHouseShow")
 	self:RegisterMessage("RS_TRADE_SKILL_SKILL_CHANGE", "OnSkillChange")
 	self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnCraft")
+	self:RegisterEvent("MAIL_SHOW", "OnMailShow")
+	-- self:RegisterEvent("NEW_AUCTION_UPDATE", "OnAuctionCreate")
 	self:SetupHookFunctions()
 	self:Print("Resell is initialized.")
 end
@@ -46,6 +48,8 @@ end
 function Resell:SetupHookFunctions()
 	Resell:Atr_Buy_ConfirmOK_OnClick_Listener()
 	Resell:Atr_Scan_FullScanDone_OnClick_Listener()
+	-- Resell:Postal_PostalOpenAllButton_OnClick_Listener()
+	-- Resell:Atr_CreateAuctionButton_OnClick_Listener()
 	-- Resell:Atr_Buy1_OnClick_Listener() -- frame is nill
 end
 
@@ -77,8 +81,17 @@ end
 function Resell:OnAuctionHouseShow()	
 	if auctionHouseFirstShown then		
 		Resell:Atr_Buy1_OnClick_Listener()
+		Resell:Atr_CreateAuctionButton_OnClick_Listener()
 		auctionHouseFirstShown = false
 	end
+end
+
+function Resell:OnMailShow()
+	if mailFirstShown then
+		Resell:Postal_PostalOpenAllButton_OnClick_Listener()
+		mailFirstShown = false
+	end
+	
 end
 
 function Resell:InitializeTradeSkill()
@@ -108,6 +121,24 @@ function Resell:Atr_Scan_FullScanDone_OnClick_Listener()
 	if doneBtnFrame then
 		doneBtnFrame:HookScript("OnClick", function ()
 			Resell:UpdateScannedPriceOnItemDatabase()
+		end)
+	end
+end
+
+function Resell:Atr_CreateAuctionButton_OnClick_Listener()
+	local frame = _G["Atr_CreateAuctionButton"]
+	if frame then
+		frame:HookScript("OnClick", function ()
+			Resell:OnAuctionCreate()
+		end)
+	end
+end
+
+function Resell:Postal_PostalOpenAllButton_OnClick_Listener()
+	local frame = _G["PostalOpenAllButton"]
+	if frame then
+		frame:HookScript("OnClick", function ()
+			Resell:Print("Attached")
 		end)
 	end
 end
@@ -187,11 +218,22 @@ function Resell.DBOperation.RegisterPurchase()
 	local numBoughtThisRound = gRs_Buy_NumBought - gRs_Buy_PreviousNumBought
 	gRs_Buy_PreviousNumBought = gRs_Buy_NumBought
 			
-	Resell.DBOperation.UpdateItem(gRs_Buy_ItemName, numBoughtThisRound, gRs_Buy_StackSize, gRs_Buy_BuyoutPrice)	
+	Resell.DBOperation.UpdateItem(gRs_Buy_ItemName, numBoughtThisRound, gRs_Buy_StackSize, (gRs_Buy_BuyoutPrice / gRs_Buy_StackSize))	
 end
 
-function Resell.DBOperation.RegisterCraft()
-	local skillIndex = GetTradeSkillSelectionIndex()
+function Resell.UTILS.GetSkillIndexBySkillName(skillName)
+
+	TradeSkillOnlyShowMakeable(true) -- this makes sense because one only would want to register craft when has the mats available and has already crafted it.
+	for i = 1,GetNumTradeSkills()
+	do
+		if GetTradeSkillInfo(i) == skillName then return i end		
+	end
+	return nil
+	
+end
+
+function Resell.DBOperation.RegisterCraft(skillName)
+	local skillIndex = Resell.UTILS.GetSkillIndexBySkillName(skillName)	
 	local craftedProductLink = GetTradeSkillItemLink(skillIndex)
 	local productName = GetItemInfo(craftedProductLink)
 	local minMade, maxMade = GetTradeSkillNumMade(skillIndex) -- if its random there is no way to know how many were exactly made.
@@ -206,17 +248,22 @@ function Resell.DBOperation.RegisterCraft()
 		-- local itemLink = GetTradeSkillReagentItemLink(skillIndex, reagentIndex)
 		local reagentName, reagentTexture, reagentCount, playerReagentCount = GetTradeSkillReagentInfo(skillIndex, reagentIndex)
 				
-		Resell.DBOperation.UpdateItem(reagentName, -reagentCount, 1, nil, playerReagentCount)
+		Resell.DBOperation.UpdateItem(reagentName, -reagentCount , 1, nil, playerReagentCount)
 	end	
 	if not serviceType then		
 		Resell.DBOperation.UpdateItem(productName, minMade, 1, craftCost)
 	end
 end
 
+-- function Resell.DBOperation.RegisterAuctionCreate()
+	
+-- end
+
+-- price per item
 function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, playerReagentCount)
 	local itemTable = Resell.db.global["ResellItemDatabase"]
 	
-	if not itemTable[itemName] then
+	if not itemTable[itemName] and itemName then
 		itemTable[itemName] = {}
 		itemTable[itemName]["price"] = 0
 		itemTable[itemName]["playerItemCount"] = 0
@@ -237,6 +284,12 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, player
 		price = itemTable[itemName]["price"]
 	end
 
+	if price == 0 and itemTable[itemName]["scannedPrice"] then
+		-- it will only get here if item has no record of how the player got it, leaving the price as 0 would not be helpful for calculating crafting costs.
+		price = itemName[itemName]["scannedPrice"]
+	end
+
+
 	local previousCount = itemTable[itemName]["playerItemCount"]
 	local previousPrice = itemTable[itemName]["price"] -- might be 0
 
@@ -252,7 +305,7 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, player
 		return
 	end
 
-	local newPrice = (previousCount * previousPrice + count * price) / newCount
+	local newPrice = (previousCount * previousPrice + (count * stackSize) * price) / newCount
 
 	itemTable[itemName]["playerItemCount"] = math.floor(newCount)
 	itemTable[itemName]["price"] = math.floor(newPrice)
@@ -264,6 +317,21 @@ end
 
 function Resell:OnCraft(event, unit, name)
 	if unit == "player" and Resell.db.global["ResellTradeSkillSkillsDatabase"][name] then		
-		Resell.DBOperation.RegisterCraft()
+		Resell.DBOperation.RegisterCraft(name)
 	end
+end
+
+function Resell:OnAuctionCreate()
+	local name, stackSize, numStacks, buyoutPrice, invCountAtStart = GetJustPostedAuctionItemInfo()
+
+	if name then
+		Resell.DBOperation.UpdateItem(name, -numStacks, stackSize, nil, invCountAtStart)
+	end
+end
+
+
+function Resell:OnMailOpenAll()
+	local numItems, totalItems = GetInboxNumItems()
+
+	
 end
