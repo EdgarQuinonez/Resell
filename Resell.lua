@@ -16,13 +16,43 @@ Resell = LibStub("AceAddon-3.0"):NewAddon("Resell", "AceConsole-3.0", "AceEvent-
 
 -- available classes
 Resell.DBOperation = {}
+Resell.Inventory = {}
 Resell.UTILS = {}
+
+Resell.CONSTANT = {
+	INVENTORY = {
+		TYPE = 1,
+		SHORT = 'S',
+		BAGSLOTS = {KEYRING_CONTAINER, 0, 1, 2, 3, 4}
+	},
+	BANK = {
+		TYPE = 2,
+		SHORT = 'B',
+		BAGSLOTS = {BANK_CONTAINER, 5, 6, 7, 8, 9, 10, 11}
+	},
+	GUILDBANK = {
+		TYPE = 3,
+		SHORT = 'G',
+		BAGSLOTS = {1, 2, 3, 4, 5, 6}
+	},
+	
+}
+
+Resell.gRs_lastEventUpdate = {}
+Resell.gRs_debounceLock = {
+	["GUILDBANKBAGSLOTS_CHANGED"] = false,
+	["BAG_UPDATE"] = false
+}
+Resell.gRs_latestChanges = {}
 
 local defaults = {
 	global = {
 		["ResellItemDatabase"] = {},
-		-- ["ResellProductDatabase"] = {},
-		["ResellTradeSkillSkillsDatabase"] = {}
+		["ResellTradeSkillSkillsDatabase"] = {},
+		["GUILD_BANK"] = {}
+	},
+	char = {
+		inventoryFirstSeen = true
 	}
 }
 
@@ -30,19 +60,15 @@ function Resell:OnInitialize()
 	-- Called when the addon is loaded
     self.db = LibStub("AceDB-3.0"):New("ResellDB", defaults, true)
 
-
-
 	self:RegisterEvent("TRADE_SKILL_SHOW", "OnTradeSkillShow")
-	-- self:RegisterEvent("TRADE_SKILL_CLOSE", "KillTradeSkill")		
-	self:RegisterEvent("TRADE_SKILL_UPDATE", "OnSkillChange") -- filtering, searching would change selection without click (handler for calling OnSkillChange)	
-	-- self:RegisterEvent("AUCTION_HOUSE_CLOSE", "KillAuctionHouse")
 	self:RegisterEvent("AUCTION_HOUSE_SHOW", "OnAuctionHouseShow")
 	self:RegisterMessage("RS_TRADE_SKILL_SKILL_CHANGE", "OnSkillChange")
 	self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnCraft")
-	self:RegisterEvent("MAIL_SHOW", "OnMailShow")
-	-- self:RegisterEvent("NEW_AUCTION_UPDATE", "OnAuctionCreate")
+
+	self.Inventory:InitializeInventory()
 	self:SetupHookFunctions()
-	self:Print("Resell is initialized.")
+	self:Print("Initialized.")
+	
 end
 
 function Resell:SetupHookFunctions()
@@ -78,10 +104,42 @@ function Resell.UTILS.AddTradeSkillSkill(skillIndex)
 
 end
 
+-- call only in desired RegisterEvent handler
+-- threshold in seconds (up to ms precision)
+function Resell.UTILS.DebouncedEvent(event, callback, threshold)
+	if Resell.gRs_debounceLock[event] then return end
+	Resell.gRs_debounceLock[event] = true
+	local f = CreateFrame("Frame")
+	f:SetScript("OnUpdate", function ()		
+		local elapsed = GetTime() - Resell.gRs_lastEventUpdate[event] 
+		if threshold - elapsed <= 0 then
+			callback()
+			Resell.gRs_debounceLock[event] = false
+			f:SetScript("OnUpdate", nil)
+			f:Hide()
+		end
+	end)
+	
+end
+
+-- shallow copy
+-- to: tbl
+-- from: src tbl
+function Resell.UTILS.CopyTable(to, from)
+
+	-- clear to tbl
+	for k, v in pairs(to) do to[k] = nil end
+
+	for k, v in pairs(from)
+	do
+		to[k] = v
+	end
+end
+
 function Resell:OnAuctionHouseShow()	
 	if auctionHouseFirstShown then		
 		Resell:Atr_Buy1_OnClick_Listener()
-		Resell:Atr_CreateAuctionButton_OnClick_Listener()
+		-- Resell:Atr_CreateAuctionButton_OnClick_Listener()
 		auctionHouseFirstShown = false
 	end
 end
@@ -125,23 +183,14 @@ function Resell:Atr_Scan_FullScanDone_OnClick_Listener()
 	end
 end
 
-function Resell:Atr_CreateAuctionButton_OnClick_Listener()
-	local frame = _G["Atr_CreateAuctionButton"]
-	if frame then
-		frame:HookScript("OnClick", function ()
-			Resell:OnAuctionCreate()
-		end)
-	end
-end
-
-function Resell:Postal_PostalOpenAllButton_OnClick_Listener()
-	local frame = _G["PostalOpenAllButton"]
-	if frame then
-		frame:HookScript("OnClick", function ()
-			Resell:Print("Attached")
-		end)
-	end
-end
+-- function Resell:Atr_CreateAuctionButton_OnClick_Listener()
+-- 	local frame = _G["Atr_CreateAuctionButton"]
+-- 	if frame then
+-- 		frame:HookScript("OnClick", function ()
+-- 			Resell:OnAuctionCreate()
+-- 		end)
+-- 	end
+-- end
 
 function Resell:UpdateScannedPriceOnItemDatabase()
 	for itemName, _ in pairs(Resell.db.global["ResellItemDatabase"])
@@ -223,9 +272,10 @@ end
 
 function Resell.UTILS.GetSkillIndexBySkillName(skillName)
 
-	TradeSkillOnlyShowMakeable(true) -- this makes sense because one only would want to register craft when has the mats available and has already crafted it.
+	-- TradeSkillOnlyShowMakeable(true) -- this makes sense because one only would want to register craft when has the mats available and has already crafted it.
 	for i = 1,GetNumTradeSkills()
 	do
+		-- Resell:Print(GetTradeSkillInfo(i))
 		if GetTradeSkillInfo(i) == skillName then return i end		
 	end
 	return nil
@@ -233,31 +283,30 @@ function Resell.UTILS.GetSkillIndexBySkillName(skillName)
 end
 
 function Resell.DBOperation.RegisterCraft(skillName)
-	local skillIndex = Resell.UTILS.GetSkillIndexBySkillName(skillName)	
-	local craftedProductLink = GetTradeSkillItemLink(skillIndex)
-	local productName = GetItemInfo(craftedProductLink)
-	local minMade, maxMade = GetTradeSkillNumMade(skillIndex) -- if its random there is no way to know how many were exactly made.
-	local craftCost = Resell:CalculateCraftCost(skillIndex) -- making it a little bit more expensive, maybe consider using global variable that hold this when OnSkillChange happens.
-	-- serviceType = nill -> produces an item
-	local _, _, _, _, serviceType = GetTradeSkillInfo(skillIndex)
-
-
-	local nReagents = GetTradeSkillNumReagents(skillIndex)
-	for reagentIndex = 1,nReagents
-	do
-		-- local itemLink = GetTradeSkillReagentItemLink(skillIndex, reagentIndex)
-		local reagentName, reagentTexture, reagentCount, playerReagentCount = GetTradeSkillReagentInfo(skillIndex, reagentIndex)
-				
-		Resell.DBOperation.UpdateItem(reagentName, -reagentCount , 1, nil, playerReagentCount)
-	end	
-	if not serviceType then		
-		Resell.DBOperation.UpdateItem(productName, minMade, 1, craftCost)
+	local skillIndex = Resell.UTILS.GetSkillIndexBySkillName(skillName)
+	-- Resell:Print(skillIndex) -- TODO: FIX skillIndex = nil
+	if skillIndex then		
+		local craftedProductLink = GetTradeSkillItemLink(skillIndex)
+		local productName = GetItemInfo(craftedProductLink)
+		local minMade, maxMade = GetTradeSkillNumMade(skillIndex) -- if its random there is no way to know how many were exactly made.
+		local craftCost = Resell:CalculateCraftCost(skillIndex) -- making it a little bit more expensive, maybe consider using global variable that hold this when OnSkillChange happens.
+		-- serviceType = nill -> produces an item
+		local _, _, _, _, serviceType = GetTradeSkillInfo(skillIndex)
+	
+	
+		local nReagents = GetTradeSkillNumReagents(skillIndex)
+		for reagentIndex = 1,nReagents
+		do
+			-- local itemLink = GetTradeSkillReagentItemLink(skillIndex, reagentIndex)
+			local reagentName, reagentTexture, reagentCount, playerReagentCount = GetTradeSkillReagentInfo(skillIndex, reagentIndex)
+					
+			Resell.DBOperation.UpdateItem(reagentName, -reagentCount , 1, nil, playerReagentCount)
+		end	
+		if not serviceType then		
+			Resell.DBOperation.UpdateItem(productName, minMade, 1, craftCost)
+		end
 	end
 end
-
--- function Resell.DBOperation.RegisterAuctionCreate()
-	
--- end
 
 -- price per item
 function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, playerReagentCount)
@@ -286,7 +335,7 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, player
 
 	if price == 0 and itemTable[itemName]["scannedPrice"] then
 		-- it will only get here if item has no record of how the player got it, leaving the price as 0 would not be helpful for calculating crafting costs.
-		price = itemName[itemName]["scannedPrice"]
+		price = itemTable[itemName]["scannedPrice"]
 	end
 
 
@@ -319,19 +368,4 @@ function Resell:OnCraft(event, unit, name)
 	if unit == "player" and Resell.db.global["ResellTradeSkillSkillsDatabase"][name] then		
 		Resell.DBOperation.RegisterCraft(name)
 	end
-end
-
-function Resell:OnAuctionCreate()
-	local name, stackSize, numStacks, buyoutPrice, invCountAtStart = GetJustPostedAuctionItemInfo()
-
-	if name then
-		Resell.DBOperation.UpdateItem(name, -numStacks, stackSize, nil, invCountAtStart)
-	end
-end
-
-
-function Resell:OnMailOpenAll()
-	local numItems, totalItems = GetInboxNumItems()
-
-	
 end

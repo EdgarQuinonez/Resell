@@ -52,3 +52,4 @@ Libs\AceSerializer-3.0\AceSerializer-3.0.xml
 
 Libs\Ace3.lua
 Resell.lua
+ResellInventory.lua
