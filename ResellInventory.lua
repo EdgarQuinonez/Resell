@@ -189,7 +189,7 @@ function Resell:GUILDBANKBAGSLOTS_CHANGED(event)
             local prevCount = Resell.UTILS.CopyTable(Resell.db.global["GUILDBANK"][tab.guildName][tab.name])            
             tab:SetCurrentItemCount()      
             Resell:UpdateItemCount(tab.itemCount, prevCount)
-        end, 0.80)  
+        end, 0.5)  
     end
 end
 

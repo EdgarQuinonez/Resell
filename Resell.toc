@@ -2,7 +2,7 @@
 ## Title: Resell
 ## Notes: Level up your AH flipping with automatic mats cost tracking and profit calculations for epic BoEs
 ## Version: 0.1
-## Dependencies: Auctionator, Postal
+## Dependencies: Auctionator
 ## OptionalDeps: Ace3
 ## SavedVariables: ResellDB
 
