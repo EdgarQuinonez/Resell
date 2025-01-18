@@ -9,6 +9,7 @@ Resell.Inventory.bags = {}
 Resell.Inventory.guildBankTabs = {}
 
 Resell.Inventory.Bag.BAG_UPDATE_STACK = {}
+-- Resell.Inventory.Bag.PLAYERBANKSLOTS_CHANGED_STACK = {}
 
 function Resell.Inventory:InitializeInventory()
     self.Bag:InitializeBags()
@@ -108,15 +109,53 @@ function Resell.Inventory.Bag:BAG_UPDATE(event, bagId)
     
 end
 
+
+
 function Resell:BANKFRAME_OPENED()
     Resell.atBank = true
+
+    for i, slot in pairs(Resell.CONSTANT.BANK.BAGSLOTS)
+    do
+        local bag = Resell.Inventory:GetBag(slot)
+        if not bag then            
+            bag = Resell.Inventory.Bag:Create(slot, Resell.CONSTANT.BANK.TYPE)
+            table.insert(Resell.Inventory.bags, bag)
+            Resell:Print("For bag "..bag.name)
+            local prevCount = Resell.UTILS.CopyTable(Resell.db.char["BAG"][bag.name]) -- copy of what was in db.
+            Resell:Print("Was: ")
+            for k,v in pairs(prevCount)
+            do
+                Resell:Print(k, v)
+            end
+            bag:SetCurrentItemCount()
+            Resell:Print("Is: ")
+            for k,v in pairs(bag.itemCount)
+            do
+                Resell:Print(k, v)
+            end
+
+            Resell:UpdateItemCount(bag.itemCount, prevCount) 
+        end
+    end
 end
+
 
 function Resell:BANKFRAME_CLOSED()
     Resell.atBank = false    
 end
 
-function Resell:PLAYERBANKSLOTS_CHANGED()
+function Resell:PLAYERBANKSLOTS_CHANGED(event, slot)    
+    if Resell.atBank then        
+        self.gRs_lastEventUpdate[event] = GetTime()
+        
+        self.UTILS.DebouncedEvent(event, function ()
+            local bankContainer = Resell.Inventory:GetBag(Resell.CONSTANT.BANK.BAGSLOTS[1]) -- BANK_CONTAINER
+            local prevCount = Resell.UTILS.CopyTable(Resell.db.char["BAG"][bankContainer.name])
+            bankContainer:SetCurrentItemCount()
+
+            self:UpdateItemCount(bankContainer.itemCount, prevCount)
+        end, 0.005)
+    end
     
 end
 
