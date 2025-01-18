@@ -49,37 +49,50 @@ local defaults = {
 	global = {
 		["ResellItemDatabase"] = {},
 		["ResellTradeSkillSkillsDatabase"] = {},
-		["GUILD_BANK"] = {}
+		["GUILDBANK"] = {}
 	},
 	char = {
-		inventoryFirstSeen = true
+		-- bags and bank
+		["BAG"] = {},		
 	}
 }
 
 function Resell:OnInitialize()
-	-- Called when the addon is loaded
+	self.atBank = false
+	self.atGuildBank = false
+
     self.db = LibStub("AceDB-3.0"):New("ResellDB", defaults, true)
 
-	self:RegisterEvent("TRADE_SKILL_SHOW", "OnTradeSkillShow")
-	self:RegisterEvent("AUCTION_HOUSE_SHOW", "OnAuctionHouseShow")
-	self:RegisterMessage("RS_TRADE_SKILL_SKILL_CHANGE", "OnSkillChange")
-	self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnCraft")
-
+	
 	self.Inventory:InitializeInventory()
 	self:SetupHookFunctions()
 	self:Print("Initialized.")
 	
 end
 
+function Resell:OnEnable()
+	self:RegisterEvent("TRADE_SKILL_SHOW")
+	self:RegisterEvent("AUCTION_HOUSE_SHOW")
+	self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+    self:RegisterEvent("BAG_UPDATE")
+	self:RegisterEvent("GUILDBANKFRAME_OPENED")
+    self:RegisterEvent("GUILDBANKFRAME_CLOSED")
+    self:RegisterEvent("GUILDBANKBAGSLOTS_CHANGED")
+	self:RegisterEvent("PLAYERBANKSLOTS_CHANGED")
+	self:RegisterEvent("BANKFRAME_OPENED")
+	self:RegisterEvent("BANKFRAME_CLOSED")
+end
+
+function Resell:OnDisable()
+	self:UnregisterAllEvents()
+end
+
 function Resell:SetupHookFunctions()
 	Resell:Atr_Buy_ConfirmOK_OnClick_Listener()
 	Resell:Atr_Scan_FullScanDone_OnClick_Listener()
-	-- Resell:Postal_PostalOpenAllButton_OnClick_Listener()
-	-- Resell:Atr_CreateAuctionButton_OnClick_Listener()
-	-- Resell:Atr_Buy1_OnClick_Listener() -- frame is nill
 end
 
-function Resell:OnTradeSkillShow()	
+function Resell:TRADE_SKILL_SHOW()	
 	if tradeSkillFirstShown then		
 		for i=1,GetNumTradeSkills()
 		do
@@ -87,7 +100,7 @@ function Resell:OnTradeSkillShow()
 			Resell.UTILS.AddTradeSkillSkill(i)
 			if frame then						
 				frame:HookScript("OnClick", function()
-					Resell:SendMessage("RS_TRADE_SKILL_SKILL_CHANGE")
+					self:OnSkillChange(i)
 				end)
 			end
 		end
@@ -125,18 +138,21 @@ end
 -- shallow copy
 -- to: tbl
 -- from: src tbl
-function Resell.UTILS.CopyTable(to, from)
-
-	-- clear to tbl
-	for k, v in pairs(to) do to[k] = nil end
-
-	for k, v in pairs(from)
-	do
-		to[k] = v
+function Resell.UTILS.CopyTable(from, to)
+	if type(to) ~= "table" then to = {} end
+	if type(from) == "table" then							
+		for k, v in pairs(from)
+		do
+			if type(v) == "table" then
+				v = Resell.UTILS.CopyTable(v, to[k])
+			end
+			to[k] = v
+		end
 	end
+	return to
 end
 
-function Resell:OnAuctionHouseShow()	
+function Resell:AUCTION_HOUSE_SHOW()	
 	if auctionHouseFirstShown then		
 		Resell:Atr_Buy1_OnClick_Listener()
 		-- Resell:Atr_CreateAuctionButton_OnClick_Listener()
@@ -199,13 +215,7 @@ function Resell:UpdateScannedPriceOnItemDatabase()
 	end
 end
 
-function Resell:OnEnable()
-	-- Called when the addon is enabled
-end
 
-function Resell:OnDisable()
-	-- Called when the addon is disabled
-end
 
 function Resell:CalculateCraftCost(skillIndex)
 	local nReagents = GetTradeSkillNumReagents(skillIndex)
@@ -246,8 +256,7 @@ function Resell:CalculateCraftCost(skillIndex)
 	return total
 end
 
-function Resell:OnSkillChange()
-	local skillIndex = GetTradeSkillSelectionIndex()
+function Resell:OnSkillChange(skillIndex)	
 	local craftCost = Resell:CalculateCraftCost(skillIndex)
 	
 	local gold = math.floor(craftCost / (100 * 100))
@@ -364,7 +373,8 @@ function Resell:OnBuyout()
 	Resell.DBOperation.RegisterPurchase()
 end
 
-function Resell:OnCraft(event, unit, name)
+function Resell:UNIT_SPELLCAST_SUCCEEDED(event, unit, name)
+	-- Filters names to respond only on trade skill names.
 	if unit == "player" and Resell.db.global["ResellTradeSkillSkillsDatabase"][name] then		
 		Resell.DBOperation.RegisterCraft(name)
 	end
