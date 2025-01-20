@@ -110,7 +110,7 @@ function Resell:TRADE_SKILL_SHOW()
 			Resell.UTILS.AddTradeSkillSkill(i)
 			if frame then						
 				frame:HookScript("OnClick", function()
-					self:OnSkillChange(i)
+					self:OnSkillChange()
 				end)
 			end
 		end
@@ -123,6 +123,7 @@ function Resell:TRADE_SKILL_CLOSE()
 end
 
 function Resell.UTILS.AddTradeSkillSkill(skillIndex)
+
 	local skillName, skillType = GetTradeSkillInfo(skillIndex)
 
 	if skillType ~= "header" and not Resell.db.global["ResellTradeSkillSkillsDatabase"][skillName] then
@@ -245,6 +246,8 @@ function Resell:CalculateCraftCost(reagentList)
 
 	for name, count in pairs(reagentList)
 	do
+		if not Resell.db.global.ResellItemDatabase[name] then Resell.db.global.ResellItemDatabase[name] = { price = 0, scannedPrice = GetItemScannedPrice(name) } end
+
 		realCraftCost = realCraftCost + Resell.db.global.ResellItemDatabase[name].price * count
 		marketCraftCost = marketCraftCost + Resell.db.global.ResellItemDatabase[name].scannedPrice * count
 	end
@@ -252,16 +255,39 @@ function Resell:CalculateCraftCost(reagentList)
 	return realCraftCost, marketCraftCost
 end
 
-function Resell:OnSkillChange(skillIndex)	
-	local craftCost = Resell:CalculateCraftCost(skillIndex)
-	
-	local gold = math.floor(craftCost / (100 * 100))
-	local silver = math.floor(craftCost / 100) - (gold * 100)
-	local copper = craftCost - (silver * 100 + gold * 100 * 100)
+function Resell:OnSkillChange()	
+	if Resell.tradeSkillOpen then
+		local skillIndex = GetTradeSkillSelectionIndex()
 
-	Resell:Printf("Craft Cost: %d gold %d silver %d copper.", gold, silver, copper)	
+		local reagentList = {}
+		for i = 1,GetTradeSkillNumReagents(skillIndex)
+		do
+			local name, _, count = GetTradeSkillReagentInfo(skillIndex, i)
+			reagentList[name] = count
+		end			
+		local realCraftCost, marketCraftCost = Resell:CalculateCraftCost(reagentList)
+
+		if realCraftCost and marketCraftCost then			
+			Resell:Print("Real Craft Cost: "..Resell:GetMoneyString(realCraftCost))
+			Resell:Print("Market Craft Cost: "..Resell:GetMoneyString(marketCraftCost))
+		end
+	end
 end
 
+function Resell:GetMoneyString(money)
+	
+	local gold = floor(money / 10000)
+	local silver = floor((money - gold * 10000) / 100)
+	local copper = mod(money, 100)
+	if gold > 0 then
+		return format(GOLD_AMOUNT_TEXTURE.." "..SILVER_AMOUNT_TEXTURE.." "..COPPER_AMOUNT_TEXTURE, gold, 0, 0, silver, 0, 0, copper, 0, 0)
+	elseif silver > 0 then
+		return format(SILVER_AMOUNT_TEXTURE.." "..COPPER_AMOUNT_TEXTURE, silver, 0, 0, copper, 0, 0)
+	else
+		return format(COPPER_AMOUNT_TEXTURE, copper, 0, 0)
+	end
+	
+end
 
 function Resell.DBOperation.RegisterPurchase()
 	gRs_Buy_NumBought = GetNumBought()
@@ -302,10 +328,8 @@ function Resell.DBOperation.RegisterCraft()
 		end		
 	end
 	local realCraftCost, marketCraftCost = Resell:CalculateCraftCost(gRs_TradeSkill_Reagents)	
-	
-	Resell:Print(gRs_TradeSkill_ProductName, productCount)
-	if gRs_TradeSkill_ProductName and productCount > 0 then
-		Resell:Print("craft cost: ", realCraftCost)
+		
+	if gRs_TradeSkill_ProductName and productCount > 0 then		
 		Resell.DBOperation.UpdateItem(gRs_TradeSkill_ProductName, productCount, 1, realCraftCost, false, realCraftCost, marketCraftCost)
 	end
 end
@@ -325,7 +349,6 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, update
 
 	if not price then
 		price = itemTable[itemName].price
-		Resell:Print("No price provided: ", itemName, price)
 	end
 
 	if realCraftCost then
@@ -349,10 +372,10 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, update
 	end
 
 	local newPrice = (previousCount * previousPrice + (count * stackSize) * price) / newCount
-	itemTable[itemName]["price"] = math.floor(newPrice)	
+	itemTable[itemName]["price"] = floor(newPrice)	
 	
 	if updateCount then		
-		itemTable[itemName]["playerItemCount"] = math.floor(newCount)
+		itemTable[itemName]["playerItemCount"] = floor(newCount)
 	end
 end
 
