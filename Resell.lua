@@ -432,7 +432,6 @@ function Resell:OnLoot()
 	-- find container		
 	for name, count in pairs(Resell.gRs_latestChanges)
 	do
-		Resell:Print(name, count)		
 		if count < 0 then
 			container = name
 		else

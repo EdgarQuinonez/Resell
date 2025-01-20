@@ -254,9 +254,4 @@ function Resell:UpdateItemCount(currItemCount, prevItemCount)
     end
 
     Resell.gRs_latestChanges = changes
-    -- Resell:Print("UpdateItemCount fired: ")
-    -- for k,v in pairs(Resell.gRs_latestChanges)
-    -- do
-    --     Resell:Print(k,v)
-    -- end
 end
