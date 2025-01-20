@@ -104,7 +104,7 @@ function Resell.Inventory.Bag:BAG_UPDATE(event, bagId)
             end
         end
         Resell:UpdateItemCount(totalCurrCount, totalPrevCount)        
-    end, 0.05)
+    end, 0.35)
     
 end
 
@@ -241,7 +241,7 @@ function Resell:UpdateItemCount(currItemCount, prevItemCount)
 
         if diff ~= 0 then changes[k] = diff end
 
-        Resell.DBOperation.UpdateItem(k, diff, 1, 0, true)
+        Resell.DBOperation.UpdateItem(k, diff, 1, nil, true)
         prevItemCount[k] = nil -- remove updated item to avoid iterating through it again in the next loop 
     end
     for k, v in pairs(prevItemCount) do
@@ -250,7 +250,7 @@ function Resell:UpdateItemCount(currItemCount, prevItemCount)
 
         if diff ~= 0 then changes[k] = diff end
 
-        Resell.DBOperation.UpdateItem(k, diff, 1, 0, true)
+        Resell.DBOperation.UpdateItem(k, diff, 1, nil, true)
     end
 
     Resell.gRs_latestChanges = changes  

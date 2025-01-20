@@ -245,7 +245,6 @@ function Resell:CalculateCraftCost(reagentList)
 
 	for name, count in pairs(reagentList)
 	do
-		Resell:Print(name.." price "..Resell.db.global.ResellItemDatabase[name].price.." is "..realCraftCost)
 		realCraftCost = realCraftCost + Resell.db.global.ResellItemDatabase[name].price * count
 		marketCraftCost = marketCraftCost + Resell.db.global.ResellItemDatabase[name].scannedPrice * count
 	end
@@ -304,7 +303,9 @@ function Resell.DBOperation.RegisterCraft()
 	end
 	local realCraftCost, marketCraftCost = Resell:CalculateCraftCost(gRs_TradeSkill_Reagents)	
 	
+	Resell:Print(gRs_TradeSkill_ProductName, productCount)
 	if gRs_TradeSkill_ProductName and productCount > 0 then
+		Resell:Print("craft cost: ", realCraftCost)
 		Resell.DBOperation.UpdateItem(gRs_TradeSkill_ProductName, productCount, 1, realCraftCost, false, realCraftCost, marketCraftCost)
 	end
 end
@@ -323,7 +324,8 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, update
 	end
 
 	if not price then
-		price = 0
+		price = itemTable[itemName].price
+		Resell:Print("No price provided: ", itemName, price)
 	end
 
 	if realCraftCost then
@@ -346,8 +348,6 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, update
 		return
 	end
 
-	Resell:Print(itemName, previousCount)
-	Resell:Print(itemName, newCount)
 	local newPrice = (previousCount * previousPrice + (count * stackSize) * price) / newCount
 	itemTable[itemName]["price"] = math.floor(newPrice)	
 	
@@ -370,6 +370,7 @@ function Resell:UNIT_SPELLCAST_SENT(event, unit, name)
 			for i = 1,GetTradeSkillNumReagents(skillIndex)
 			do
 				local name, _, count = GetTradeSkillReagentInfo(skillIndex, i)
+
 				gRs_TradeSkill_Reagents[name] = count
 			end			
 		end
@@ -379,6 +380,6 @@ end
 function Resell:UNIT_SPELLCAST_SUCCEEDED(event, unit, name)
 	-- Filters names to respond only on trade skill names.
 	if unit == "player" and Resell.db.global["ResellTradeSkillSkillsDatabase"][name] then
-		Resell:ScheduleTimer("RegisterCraft", 0.1) -- small delay to allow gRs_latestChanges be updated first even if BAG_UPDATE happens after the UNIT_SPELLCAST_SUCCEEDED event
+		Resell:ScheduleTimer("RegisterCraft", 0.7) -- small delay to allow gRs_latestChanges be updated first even if BAG_UPDATE happens after the UNIT_SPELLCAST_SUCCEEDED event
 	end
 end
