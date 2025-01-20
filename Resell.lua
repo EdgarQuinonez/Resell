@@ -66,10 +66,11 @@ local defaults = {
 function Resell:OnInitialize()
 	self.atBank = false
 	self.atGuildBank = false
-
-    self.db = LibStub("AceDB-3.0"):New("ResellDB", defaults, true)
 	
-	self.Inventory:InitializeInventory()
+    self.db = LibStub("AceDB-3.0"):New("ResellDB", defaults, true)	    
+	
+	self:ScheduleTimer("InitializeInventory", 0.5)
+	-- self.Inventory:InitializeInventory()
 	self:SetupHookFunctions()
 	self:Print("Initialized.")	
 end
@@ -82,11 +83,11 @@ function Resell:OnEnable()
 	self:RegisterEvent("AUCTION_HOUSE_CLOSED")
 	self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 	self:RegisterEvent("UNIT_SPELLCAST_SENT")
-    self:RegisterEvent("BAG_UPDATE")
 	self:RegisterEvent("GUILDBANKFRAME_OPENED")
     self:RegisterEvent("GUILDBANKFRAME_CLOSED")
     self:RegisterEvent("GUILDBANKBAGSLOTS_CHANGED")
 	self:RegisterEvent("PLAYERBANKSLOTS_CHANGED")
+    self:RegisterEvent("BAG_UPDATE")
 	self:RegisterEvent("BANKFRAME_OPENED")
 	self:RegisterEvent("BANKFRAME_CLOSED")
 	self:RegisterEvent("LOOT_SLOT_CLEARED")
@@ -317,7 +318,7 @@ function Resell:RegisterCraft()
 	Resell.DBOperation.RegisterCraft()
 end
 
-function Resell.DBOperation.RegisterCraft()	
+function Resell.DBOperation.RegisterCraft()
 	if type(Resell.gRs_latestChanges) ~= "table" then return end
 
 	local productCount = 0

@@ -9,8 +9,8 @@ Resell.Inventory.guildBankTabs = {}
 Resell.Inventory.Bag.BAG_UPDATE_STACK = {}
 -- Resell.Inventory.Bag.PLAYERBANKSLOTS_CHANGED_STACK = {}
 
-function Resell.Inventory:InitializeInventory()
-    self.Bag:InitializeBags()
+function Resell:InitializeInventory()
+    self.Inventory.Bag:InitializeBags()
 end
 
 -- Bag Constructor
@@ -121,7 +121,6 @@ function Resell:BANKFRAME_OPENED()
             table.insert(Resell.Inventory.bags, bag)
             local prevCount = Resell.UTILS.CopyTable(Resell.db.char["BAG"][bag.name]) -- copy of what was in db.
             bag:SetCurrentItemCount()
-       
             Resell:UpdateItemCount(bag.itemCount, prevCount) 
         end
     end
@@ -225,7 +224,7 @@ function Resell:UpdateItemCount(currItemCount, prevItemCount)
     local changes = {}
 
     if not currItemCount then
-        error("Can't update item count without current item count.")
+        error("Can't update item count without current item count.", 2)
     end
 
     if type(prevItemCount) ~= "table" then prevItemCount = {} end
@@ -233,6 +232,7 @@ function Resell:UpdateItemCount(currItemCount, prevItemCount)
     for k, v in pairs(currItemCount)
     do
         -- item did not exist on the previous count
+
         if not prevItemCount[k] then
             prevItemCount[k] = 0
         end
@@ -244,18 +244,19 @@ function Resell:UpdateItemCount(currItemCount, prevItemCount)
         Resell.DBOperation.UpdateItem(k, diff, 1, nil, true)
         prevItemCount[k] = nil -- remove updated item to avoid iterating through it again in the next loop 
     end
+
     for k, v in pairs(prevItemCount) do
         -- item ceased to exist in the current count                
         local diff = -v
-
         if diff ~= 0 then changes[k] = diff end
 
         Resell.DBOperation.UpdateItem(k, diff, 1, nil, true)
     end
 
     Resell.gRs_latestChanges = changes
-    for k,v in pairs(Resell.gRs_latestChanges)
-    do
-        Resell:Print(k,v)
-    end
+    -- Resell:Print("UpdateItemCount fired: ")
+    -- for k,v in pairs(Resell.gRs_latestChanges)
+    -- do
+    --     Resell:Print(k,v)
+    -- end
 end
