@@ -89,6 +89,8 @@ function Resell:OnEnable()
 	self:RegisterEvent("PLAYERBANKSLOTS_CHANGED")
 	self:RegisterEvent("BANKFRAME_OPENED")
 	self:RegisterEvent("BANKFRAME_CLOSED")
+	self:RegisterEvent("LOOT_SLOT_CLEARED")
+	self:RegisterEvent("LOOT_CLOSED")
 end
 
 function Resell:OnDisable()
@@ -232,7 +234,7 @@ end
 function Resell:UpdateScannedPriceOnItemDatabase()
 	for itemName, _ in pairs(Resell.db.global["ResellItemDatabase"])
 	do
-		Resell.db.global["ResellItemDatabase"][itemName]["scannedPrice"] = GetItemScannedPrice(itemName)
+		Resell.db.global["ResellItemDatabase"][itemName]["scannedPrice"] = GetItemScannedPrice(itemName) or 0
 	end
 end
 
@@ -246,7 +248,7 @@ function Resell:CalculateCraftCost(reagentList)
 
 	for name, count in pairs(reagentList)
 	do
-		if not Resell.db.global.ResellItemDatabase[name] then Resell.db.global.ResellItemDatabase[name] = { price = 0, scannedPrice = GetItemScannedPrice(name) } end
+		if not Resell.db.global.ResellItemDatabase[name] then Resell.UTILS.InitItem(name) end
 
 		realCraftCost = realCraftCost + Resell.db.global.ResellItemDatabase[name].price * count
 		marketCraftCost = marketCraftCost + Resell.db.global.ResellItemDatabase[name].scannedPrice * count
@@ -334,8 +336,7 @@ function Resell.DBOperation.RegisterCraft()
 	end
 end
 
--- price per item
-function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, updateCount, realCraftCost, marketCraftCost)
+function Resell.UTILS.InitItem(itemName)
 	local itemTable = Resell.db.global["ResellItemDatabase"]
 	
 	if not itemTable[itemName] and itemName then
@@ -344,8 +345,20 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, update
 		itemTable[itemName]["realCraftCost"] = 0 -- craft cost calculated using "price"
 		itemTable[itemName]["marketCraftCost"] = 0 -- craft cost calculated using "scannedPrice"
 		itemTable[itemName]["playerItemCount"] = 0
-		itemTable[itemName]["scannedPrice"] = GetItemScannedPrice(itemName)
+		itemTable[itemName]["scannedPrice"] = GetItemScannedPrice(itemName) or 0
+	end	
+end
+
+-- price per item
+function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, updateCount, realCraftCost, marketCraftCost)
+	
+	if not itemName then
+		error("Cannot call UpdateItem without item name.", 2)
 	end
+
+	local itemTable = Resell.db.global["ResellItemDatabase"]
+	
+	Resell.UTILS.InitItem(itemName)
 
 	if not price then
 		price = itemTable[itemName].price
@@ -405,4 +418,60 @@ function Resell:UNIT_SPELLCAST_SUCCEEDED(event, unit, name)
 	if unit == "player" and Resell.db.global["ResellTradeSkillSkillsDatabase"][name] then
 		Resell:ScheduleTimer("RegisterCraft", 0.7) -- small delay to allow gRs_latestChanges be updated first even if BAG_UPDATE happens after the UNIT_SPELLCAST_SUCCEEDED event
 	end
+end
+
+function Resell:LOOT_OPENED()
+	Resell.lootWindowOpen = true	
+end
+
+function Resell:OnLoot()
+	local container;
+	local price = 0;
+	local totalCount = 0;		
+	-- find container		
+	for name, count in pairs(Resell.gRs_latestChanges)
+	do
+		Resell:Print(name, count)		
+		if count < 0 then
+			container = name
+		else
+			totalCount = totalCount + count
+		end
+	end
+	
+	if container and not Resell.db.global.ResellItemDatabase[container] then
+		Resell.UTILS.InitItem(container)
+	end
+
+	if container then			
+		price = Resell.db.global.ResellItemDatabase[container].price
+	end
+
+	if totalCount == 0 then
+		Resell:Print("Loot was empty!")
+		return
+	end
+	-- update price on loot
+	for name, count in pairs(Resell.gRs_latestChanges)
+	do
+		if count > 0 then
+			Resell.DBOperation.UpdateItem(name, count, 1, price / totalCount, false)			
+		end		
+	end
+	
+end
+
+-- only works with auto loot on
+function Resell:LOOT_SLOT_CLEARED(event, lootSlot)
+	
+	Resell.gRs_lastEventUpdate[event] = GetTime()
+	
+	Resell.UTILS.DebouncedEvent(event, function ()
+		Resell:Print("OnLoot fired!")		
+		Resell:ScheduleTimer("OnLoot", 0.7)
+	end, 0.005)
+end
+
+function Resell:LOOT_CLOSED()
+	Resell.lootWindowOpen = false
 end

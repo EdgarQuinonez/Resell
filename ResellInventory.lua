@@ -253,5 +253,9 @@ function Resell:UpdateItemCount(currItemCount, prevItemCount)
         Resell.DBOperation.UpdateItem(k, diff, 1, nil, true)
     end
 
-    Resell.gRs_latestChanges = changes  
+    Resell.gRs_latestChanges = changes
+    for k,v in pairs(Resell.gRs_latestChanges)
+    do
+        Resell:Print(k,v)
+    end
 end
