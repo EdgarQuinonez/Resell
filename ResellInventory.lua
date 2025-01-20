@@ -1,5 +1,3 @@
-
-
 -- Available classes
 Resell.Inventory.Bag = {}
 Resell.Inventory.GuildBank = {}
@@ -66,6 +64,7 @@ function Resell.Inventory.Bag:SetCurrentItemCount()
 end
 
 function Resell:BAG_UPDATE(event, bagId)
+
     return Resell.Inventory.Bag:BAG_UPDATE(event, bagId)
 end
 
@@ -105,7 +104,7 @@ function Resell.Inventory.Bag:BAG_UPDATE(event, bagId)
             end
         end
         Resell:UpdateItemCount(totalCurrCount, totalPrevCount)        
-    end, 0.005)
+    end, 0.05)
     
 end
 
@@ -181,11 +180,10 @@ function Resell:GUILDBANKBAGSLOTS_CHANGED(event)
         end
          
         self.UTILS.DebouncedEvent(event, function ()            
-
             if not Resell.db.global["GUILDBANK"][tab.guildName] then
                 Resell.db.global["GUILDBANK"][tab.guildName] = {}
             end
- 
+
             local prevCount = Resell.UTILS.CopyTable(Resell.db.global["GUILDBANK"][tab.guildName][tab.name])            
             tab:SetCurrentItemCount()      
             Resell:UpdateItemCount(tab.itemCount, prevCount)
@@ -243,7 +241,7 @@ function Resell:UpdateItemCount(currItemCount, prevItemCount)
 
         if diff ~= 0 then changes[k] = diff end
 
-        Resell.DBOperation.UpdateItem(k, diff, 1)
+        Resell.DBOperation.UpdateItem(k, diff, 1, 0, true)
         prevItemCount[k] = nil -- remove updated item to avoid iterating through it again in the next loop 
     end
     for k, v in pairs(prevItemCount) do
@@ -252,12 +250,8 @@ function Resell:UpdateItemCount(currItemCount, prevItemCount)
 
         if diff ~= 0 then changes[k] = diff end
 
-        Resell.DBOperation.UpdateItem(k, diff, 1)
+        Resell.DBOperation.UpdateItem(k, diff, 1, 0, true)
     end
 
-    Resell.gRs_latestChanges = changes
-    -- for k, v in pairs(Resell.gRs_latestChanges)
-    -- do
-    --     Resell:Print(k, v)
-    -- end
+    Resell.gRs_latestChanges = changes  
 end
