@@ -4,6 +4,7 @@
 ## Version: 0.1
 ## Dependencies: Auctionator
 ## OptionalDeps: Ace3
+
 ## SavedVariables: ResellDB
 
 Libs\LibStub\LibStub.lua

@@ -15,6 +15,8 @@ local gRs_TradeSkill_ProductName;
 local tradeSkillFirstShown = true
 local auctionHouseFirstShown = true
 
+local tradeSkillLoaded = false
+
 Resell = LibStub("AceAddon-3.0"):NewAddon("Resell", "AceConsole-3.0", "AceEvent-3.0", "AceTimer-3.0")
 
 Resell.tradeSkillOpen= false
@@ -24,6 +26,8 @@ Resell.tradeSkillOpen= false
 Resell.DBOperation = {}
 Resell.Inventory = {}
 Resell.UTILS = {}
+Resell.GUI = {}
+Resell.GUI.Component = {}
 
 Resell.CONSTANT = {
 	INVENTORY = {
@@ -69,8 +73,7 @@ function Resell:OnInitialize()
 	
     self.db = LibStub("AceDB-3.0"):New("ResellDB", defaults, true)	    
 	
-	self:ScheduleTimer("InitializeInventory", 0.5)
-	-- self.Inventory:InitializeInventory()
+	self:ScheduleTimer("InitializeInventory", 0.5) -- small delay to ensure inventory contents are loaded.
 	self:SetupHookFunctions()
 	self:Print("Initialized.")	
 end
@@ -92,6 +95,7 @@ function Resell:OnEnable()
 	self:RegisterEvent("BANKFRAME_CLOSED")
 	self:RegisterEvent("LOOT_SLOT_CLEARED")
 	self:RegisterEvent("LOOT_CLOSED")
+	self:RegisterEvent("ADDON_LOADED")
 end
 
 function Resell:OnDisable()
@@ -104,9 +108,10 @@ function Resell:SetupHookFunctions()
 	Resell:Atr_Scan_FullScanDone_OnClick()
 end
 
-function Resell:TRADE_SKILL_SHOW()
-	self.tradeSkillOpen = true	
-	if tradeSkillFirstShown then		
+function Resell:ADDON_LOADED(event, name)
+	if name == "Blizzard_TradeSkillUI" then
+		tradeSkillLoaded = true
+		Resell:InitializeGUI()
 		for i=1,GetNumTradeSkills()
 		do
 			local frame = _G["TradeSkillSkill"..i]
@@ -117,12 +122,77 @@ function Resell:TRADE_SKILL_SHOW()
 				end)
 			end
 		end
-		tradeSkillFirstShown = false
 	end
+end
+
+function Resell:TRADE_SKILL_SHOW()
+	self.tradeSkillOpen = true		
+end
+
+function Resell:InitializeGUI()
+	Resell.GUI.InitializeComponents()
+end
+
+function Resell.GUI.InitializeComponents()
+	local py = 4
+	local px = 2
+	local rowHeight = 12
+	
+	Resell.GUI.Component.Container = CreateFrame("Frame", nil, TradeSkillFrame)
+	local width, height = TradeSkillFrame:GetSize()
+	Resell.GUI.Component.Container:SetSize(width - 100, 84)
+	Resell.GUI.Component.Container:SetPoint("LEFT", TradeSkillFrame, "RIGHT", -36, 0)
+
+	Resell.GUI.Component.Container:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", tile = true, tileSize = 8, edgeSize = 12, insets = { left = 2, right = 2, top = 2, bottom = 2 } });
+	Resell.GUI.Component.Container:SetBackdropColor(0.1,0.1,0.2,1);
+	Resell.GUI.Component.Container:SetBackdropBorderColor(0.1,0.1,0.1,1);
+
+	Resell.GUI.Component.MarketValueLabel = Resell.GUI:LabelFrame("On Auction House: ", px, py)
+	Resell.GUI.Component.RealCraftCostLabel = Resell.GUI:LabelFrame("Real Craft Cost: ", px, py - rowHeight * 1)
+	Resell.GUI.Component.MarketCraftCostLabel = Resell.GUI:LabelFrame("Market Craft Cost: ", px, py - rowHeight * 2)
+	Resell.GUI.Component.ProfitLabel = Resell.GUI:LabelFrame("Profit: ", px, py - rowHeight * 3)
+	
+	Resell.GUI.Component.MarketValueContent = Resell.GUI:ContentFrame(Resell:GetMoneyString(0), px, py)	
+	Resell.GUI.Component.RealCraftCostContent = Resell.GUI:ContentFrame(Resell:GetMoneyString(0), px, py - rowHeight * 1)
+	Resell.GUI.Component.MarketCraftCostContent = Resell.GUI:ContentFrame(Resell:GetMoneyString(0), px, py - rowHeight * 2)
+	Resell.GUI.Component.ProfitContent = Resell.GUI:ContentFrame(Resell:GetMoneyString(0), px, py - rowHeight * 3)
+end
+
+
+function Resell.GUI:LabelFrame(txt, offx, offy)
+	local tf = CreateFrame("Frame", nil, Resell.GUI.Component.Container)
+	tf:SetSize(108, 22)
+	tf:SetPoint("TOPLEFT", Resell.GUI.Component.Container, "TOPLEFT", offx, offy)
+	tf.Text = tf:CreateFontString("FrizQT")
+	tf.Text:SetPoint("RIGHT", tf, "RIGHT")
+	tf.Text:SetFont( "fonts/frizqt__.ttf", 11 )
+
+	tf.Text:SetJustifyH("RIGHT")
+	tf.Text:SetJustifyV("TOP")
+	tf.Text:SetText(txt)
+	return tf
+end
+
+function Resell.GUI:ContentFrame(txt, offx, offy)
+	local tf = CreateFrame("Frame", nil, Resell.GUI.Component.Container)
+	tf:SetSize(156, 22)
+	tf:SetPoint("TOPRIGHT", Resell.GUI.Component.Container, "TOPRIGHT", offx, offy)
+	tf.Text = tf:CreateFontString("FrizQT")
+	tf.Text:SetPoint("LEFT", tf, "LEFT")
+	tf.Text:SetFont( "fonts/frizqt__.ttf", 11 )
+
+	tf.Text:SetJustifyH("LEFT")
+	tf.Text:SetJustifyV("TOP")
+	tf.Text:SetText(txt)
+	return tf
 end
 
 function Resell:TRADE_SKILL_CLOSE()
 	self.tradeSkillOpen = false
+	-- for i, component in pairs(self.GUI.Component)
+	-- do
+	-- 	component:Hide()
+	-- end
 end
 
 function Resell.UTILS.AddTradeSkillSkill(skillIndex)
@@ -260,7 +330,12 @@ end
 
 function Resell:OnSkillChange()	
 	if Resell.tradeSkillOpen then
+
 		local skillIndex = GetTradeSkillSelectionIndex()
+
+		if skillIndex == 0 then return end
+
+		local itemName = GetItemInfo(GetTradeSkillItemLink(skillIndex))
 
 		local reagentList = {}
 		for i = 1,GetTradeSkillNumReagents(skillIndex)
@@ -271,14 +346,24 @@ function Resell:OnSkillChange()
 		local realCraftCost, marketCraftCost = Resell:CalculateCraftCost(reagentList)
 
 		if realCraftCost and marketCraftCost then			
-			Resell:Print("Real Craft Cost: "..Resell:GetMoneyString(realCraftCost))
-			Resell:Print("Market Craft Cost: "..Resell:GetMoneyString(marketCraftCost))
+			local ahPrice = GetItemScannedPrice(itemName) or 0
+			Resell.GUI.Component.MarketValueContent.Text:SetText(Resell:GetMoneyString(ahPrice))
+			Resell.GUI.Component.RealCraftCostContent.Text:SetText(Resell:GetMoneyString(realCraftCost))
+			Resell.GUI.Component.MarketCraftCostContent.Text:SetText(Resell:GetMoneyString(marketCraftCost))
+			Resell.GUI.Component.ProfitContent.Text:SetText(Resell:GetMoneyString(Resell:GetProfit(ahPrice, marketCraftCost)))
 		end
 	end
 end
 
+function Resell:GetProfit(ahPrice, craftCost)
+	return (ahPrice - craftCost) - ahPrice * 0.05
+end
+
 function Resell:GetMoneyString(money)
-	
+	if money < 0 then
+		return format(COPPER_AMOUNT_TEXTURE, 0, 0, 0)
+	end
+
 	local gold = floor(money / 10000)
 	local silver = floor((money - gold * 10000) / 100)
 	local copper = mod(money, 100)
