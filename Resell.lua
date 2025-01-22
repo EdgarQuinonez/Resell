@@ -10,6 +10,7 @@ local gRs_Buy_ItemSession;
 
 local gRs_TradeSkill_Reagents;
 local gRs_TradeSkill_ProductName;
+local gRs_TradeSkill_NumMade;
 
 -- Flags
 local tradeSkillFirstShown = true
@@ -248,7 +249,7 @@ function Resell.GUI.Component:ItemFrame(width, height, texture, reagentName, pla
 	
 	local countW, countH = f.Count:GetSize()
 	
-	f.Price = self:TextFrame(price)
+	f.Price = self:TextFrame(" > "..price)
 	f.Price:SetParent(f)
 	f.Price:SetSize(remainingWidth / 3, height)
 	f.Price:SetPoint("LEFT", f.Count, "RIGHT")
@@ -354,6 +355,9 @@ function Resell:AUCTION_HOUSE_SHOW()
 		-- Resell:Atr_CreateAuctionButton_OnClick_Listener()
 		auctionHouseFirstShown = false
 	end
+
+	Resell.GUI.Component.Container:ClearAllPoints()
+	Resell.GUI.Component.Container:SetPoint("TOPRIGHT", TradeSkillFrame, "BOTTOMLEFT")
 end
 
 function Resell:AUCTION_HOUSE_CLOSED(event)
@@ -364,7 +368,13 @@ function Resell:AUCTION_HOUSE_CLOSED(event)
 		do			
 			Resell.DBOperation.UpdateItem(itemName, v.count, 1, v.price)
 		end
+
+		-- update tooltip position
+		Resell.GUI.Component.Container:ClearAllPoints()
+		Resell.GUI.Component.Container:SetPoint("LEFT", TradeSkillFrame, "RIGHT", 0, 0)
+
 	end, 0.005)
+
 end
 
 function Resell:InitializeTradeSkill()
@@ -416,8 +426,9 @@ end
 
 
 
-function Resell:CalculateCraftCost(reagentList)
+function Resell:CalculateCraftCost(reagentList, numMade)
 	if type(reagentList) ~= "table" then return end
+	if not numMade then numMade = 1 end
 
 	local realCraftCost = 0
 	local marketCraftCost = 0
@@ -430,7 +441,7 @@ function Resell:CalculateCraftCost(reagentList)
 		marketCraftCost = marketCraftCost + Resell.db.global.ResellItemDatabase[name].scannedPrice * count
 	end
 
-	return realCraftCost, marketCraftCost
+	return realCraftCost / numMade, marketCraftCost / numMade
 end
 
 function Resell:OnSkillChange()	
@@ -464,11 +475,11 @@ function Resell:OnSkillChange()
 			f.Icon:SetBackdrop({ bgFile = texture })
 			f.Name.Text:SetText(name)
 			f.Count.Text:SetText(" x "..Resell.db.global.ResellItemDatabase[name].playerItemCount)
-			f.Price.Text:SetText(Resell:GetMoneyString(Resell.db.global.ResellItemDatabase[name].price))
+			f.Price.Text:SetText(" > "..Resell:GetMoneyString(Resell.db.global.ResellItemDatabase[name].price))
 
 			f:Show()
 		end			
-		local realCraftCost, marketCraftCost = Resell:CalculateCraftCost(reagentList)
+		local realCraftCost, marketCraftCost = Resell:CalculateCraftCost(reagentList, minMade)
 
 		if realCraftCost and marketCraftCost then			
 			local ahPrice = GetItemScannedPrice(itemName) or 0
@@ -540,7 +551,7 @@ function Resell.DBOperation.RegisterCraft()
 			break
 		end		
 	end
-	local realCraftCost, marketCraftCost = Resell:CalculateCraftCost(gRs_TradeSkill_Reagents)	
+	local realCraftCost, marketCraftCost = Resell:CalculateCraftCost(gRs_TradeSkill_Reagents, productCount)	
 		
 	if gRs_TradeSkill_ProductName and productCount > 0 then		
 		Resell.DBOperation.UpdateItem(gRs_TradeSkill_ProductName, productCount, 1, realCraftCost, false, realCraftCost, marketCraftCost)
