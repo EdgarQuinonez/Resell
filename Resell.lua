@@ -184,6 +184,7 @@ function Resell.GUI:CreateProfitPanelFrames(nRows)
 			offy = -rowHeight * i
 
 			local profitItemFrame = self.Component:ProfitItemFrame(profitPanelWidth, rowHeight, labels[i + 1], Resell:GetMoneyString(0))
+			profitItemFrame:SetParent(f)
 			profitItemFrame:SetPoint("TOPLEFT", f, "TOPLEFT", offx, offy)
 			
 			table.insert(self.profitItemFrames, profitItemFrame)
@@ -248,16 +249,15 @@ function Resell.GUI.Component:ProfitItemFrame(width, height, labelTxt, contentTx
 	f.Content = self:TextFrame(contentTxt)
 
 	f.Label:SetParent(f)
-	f.Label:SetSize((width / 2), height)
+	f.Label:SetSize((width / 2) + 12, height)
 	f.Label:SetPoint("LEFT", f, "LEFT")
 	f.Label.Text:SetJustifyH("RIGHT")
 	
 
 	f.Content:SetParent(f)
-	f.Content:SetSize((width / 2), height)
+	f.Content:SetSize((width / 2) - 12, height)
 	f.Content:SetPoint("RIGHT", f, "RIGHT")
 	f.Content.Text:SetJustifyH("LEFT")
-
 
 
 	return f
@@ -425,10 +425,10 @@ function Resell:OnSkillChange()
 
 		if realCraftCost and marketCraftCost then			
 			local ahPrice = GetItemScannedPrice(itemName) or 0
-			Resell.GUI.Component.MarketValueContent.Text:SetText(Resell:GetMoneyString(ahPrice))
-			Resell.GUI.Component.RealCraftCostContent.Text:SetText(Resell:GetMoneyString(realCraftCost))
-			Resell.GUI.Component.MarketCraftCostContent.Text:SetText(Resell:GetMoneyString(marketCraftCost))
-			Resell.GUI.Component.ProfitContent.Text:SetText(Resell:GetMoneyString(Resell:GetProfit(ahPrice, marketCraftCost)))
+			Resell.GUI.profitItemFrames[1].Content.Text:SetText(Resell:GetMoneyString(ahPrice))
+			Resell.GUI.profitItemFrames[2].Content.Text:SetText(Resell:GetMoneyString(realCraftCost))
+			Resell.GUI.profitItemFrames[3].Content.Text:SetText(Resell:GetMoneyString(marketCraftCost))
+			Resell.GUI.profitItemFrames[4].Content.Text:SetText(Resell:GetMoneyString(Resell:GetProfit(ahPrice, marketCraftCost)))
 		end
 	end
 end
