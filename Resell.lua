@@ -133,59 +133,136 @@ function Resell:InitializeGUI()
 	Resell.GUI.InitializeComponents()
 end
 
-function Resell.GUI.InitializeComponents()
-	local py = 4
-	local px = 2
-	local rowHeight = 12
+function Resell.GUI.InitializeComponents()	
+	local numRows = 6
+	local width, height = TradeSkillFrame:GetSize()
+
+	-- store frames for profit panel items
+	Resell.GUI.profitItemFrames = {}
 	
 	Resell.GUI.Component.Container = CreateFrame("Frame", nil, TradeSkillFrame)
-	local width, height = TradeSkillFrame:GetSize()
-	Resell.GUI.Component.Container:SetSize(width - 100, 84)
-	Resell.GUI.Component.Container:SetPoint("LEFT", TradeSkillFrame, "RIGHT", -36, 0)
+	Resell.GUI.Component.Container:SetSize(width, height / 4)
+	Resell.GUI.Component.Container:SetPoint("LEFT", TradeSkillFrame, "RIGHT", 0, 0)
 
 	Resell.GUI.Component.Container:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", tile = true, tileSize = 8, edgeSize = 12, insets = { left = 2, right = 2, top = 2, bottom = 2 } });
 	Resell.GUI.Component.Container:SetBackdropColor(0.1,0.1,0.2,1);
 	Resell.GUI.Component.Container:SetBackdropBorderColor(0.1,0.1,0.1,1);
 
-	Resell.GUI.Component.MarketValueLabel = Resell.GUI:LabelFrame("On Auction House: ", px, py)
-	Resell.GUI.Component.RealCraftCostLabel = Resell.GUI:LabelFrame("Real Craft Cost: ", px, py - rowHeight * 1)
-	Resell.GUI.Component.MarketCraftCostLabel = Resell.GUI:LabelFrame("Market Craft Cost: ", px, py - rowHeight * 2)
-	Resell.GUI.Component.ProfitLabel = Resell.GUI:LabelFrame("Profit: ", px, py - rowHeight * 3)
+	Resell.GUI:CreateProfitPanelFrames(numRows)
+
+
+
+	-- Resell.GUI.Component.ItemContainer = CreateFrame("Frame", nil, Resell.GUI.Component.Container)
+	-- Resell.GUI.Component.ItemContainer:SetSize((width / 2) - containerPl, 84)
+	-- Resell.GUI.Component.ItemContainer:SetPoint("RIGHT", Resell.GUI.Component.Container, "RIGHT", containerPl, 0)
+
+	-- Resell.GUI:CreateItemFrames()
+
+
+end
+
+function Resell.GUI:CreateProfitPanelFrames(nRows)
+	local f = CreateFrame("Frame", nil, self.Component.Container)
+	local containerWidth, containerHeight = self.Component.Container:GetSize()
 	
-	Resell.GUI.Component.MarketValueContent = Resell.GUI:ContentFrame(Resell:GetMoneyString(0), px, py)	
-	Resell.GUI.Component.RealCraftCostContent = Resell.GUI:ContentFrame(Resell:GetMoneyString(0), px, py - rowHeight * 1)
-	Resell.GUI.Component.MarketCraftCostContent = Resell.GUI:ContentFrame(Resell:GetMoneyString(0), px, py - rowHeight * 2)
-	Resell.GUI.Component.ProfitContent = Resell.GUI:ContentFrame(Resell:GetMoneyString(0), px, py - rowHeight * 3)
+	f:SetSize(containerWidth / 2, containerHeight)
+	f:SetPoint("LEFT", self.Component.Container, "LEFT")
+
+	local offx = 0;
+	local offy = 0;
+	
+	
+	local labels = {"On Auction House: ", "Real Craft Cost: ", "Market Craft Cost ", "Profit: "}
+	
+	local profitPanelWidth, profitPanelHeight = f:GetSize()
+	local rowHeight = profitPanelHeight / nRows
+
+	
+	for i = 0, nRows - 1
+	do	
+		if labels[i + 1] then			
+			offy = -rowHeight * i
+
+			local profitItemFrame = self.Component:ProfitItemFrame(profitPanelWidth, rowHeight, labels[i + 1], Resell:GetMoneyString(0))
+			profitItemFrame:SetPoint("TOPLEFT", f, "TOPLEFT", offx, offy)
+			
+			table.insert(self.profitItemFrames, profitItemFrame)
+		end
+	end
+
+end
+
+function Resell.GUI:CreateItemFrames()
+	local nRows = 5
+	local rowHeight = 22
+	for i = 0, nRows
+	do
+		local offx = 0
+		local offy = rowHeight * i
+		self:ItemFrame(nil, "Reagent "..i, Resell:GetMoneyString(0), 0, self.Component.ItemContainer, offx, offy)
+	end
+end
+
+function Resell.GUI:ItemFrame(texture, itemName, price, count, parent, offx, offy)
+
+	if not texture then
+		texture = "Interface\\BUTTONS\\UI-EmptySlot.blp"
+	end
+
+	local f	= CreateFrame("Frame", nil, parent)
+	local parentX, parentY = parent:GetSize()
+	
+	f:SetSize(parentX, 22)
+	f:SetPoint("LEFT", parent, "LEFT", offx, offy)
+	local iconX, iconY = 18, 18
+	f.Icon = CreateFrame("Frame", nil, f)
+	f.Icon:SetSize(iconX, iconY)
+	f.Icon:SetPoint("LEFT", f, "LEFT")
+	f.Icon:SetBackdrop({ bgFile = texture, edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", tile = false, tileSize = 8, edgeSize = 12, insets = { left = 2, right = 2, top = 2, bottom = 2 } })
+
+
+	f.Content = CreateFrame("Frame", nil, f)
+	f.Content:SetSize(parentX - iconX, 18)
+	f.Content:SetPoint("RIGHT", f, "RIGHT")
+	f.Content.Label = Resell.GUI:LabelFrame(itemName.." - "..price.." x ", f.Content, 0, 0)
+	f.Content.Count = Resell.GUI:ContentFrame(count, f.Content, 0, 0)
+
+end
+
+function Resell.GUI.Component:TextFrame(txt)
+	local f = CreateFrame("Frame")
+	f.Text = f:CreateFontString("FrizQT")
+	f.Text:SetAllPoints(f)
+	f.Text:SetFont("fonts/frizqt__.ttf", 11)
+	f.Text:SetText(txt)
+
+	return f
 end
 
 
-function Resell.GUI:LabelFrame(txt, offx, offy)
-	local tf = CreateFrame("Frame", nil, Resell.GUI.Component.Container)
-	tf:SetSize(108, 22)
-	tf:SetPoint("TOPLEFT", Resell.GUI.Component.Container, "TOPLEFT", offx, offy)
-	tf.Text = tf:CreateFontString("FrizQT")
-	tf.Text:SetPoint("RIGHT", tf, "RIGHT")
-	tf.Text:SetFont( "fonts/frizqt__.ttf", 11 )
+function Resell.GUI.Component:ProfitItemFrame(width, height, labelTxt, contentTxt)
+	local f = CreateFrame("Frame")	
+	f:SetSize(width, height)	
 
-	tf.Text:SetJustifyH("RIGHT")
-	tf.Text:SetJustifyV("TOP")
-	tf.Text:SetText(txt)
-	return tf
+	f.Label = self:TextFrame(labelTxt)
+	f.Content = self:TextFrame(contentTxt)
+
+	f.Label:SetParent(f)
+	f.Label:SetSize((width / 2), height)
+	f.Label:SetPoint("LEFT", f, "LEFT")
+	f.Label.Text:SetJustifyH("RIGHT")
+	
+
+	f.Content:SetParent(f)
+	f.Content:SetSize((width / 2), height)
+	f.Content:SetPoint("RIGHT", f, "RIGHT")
+	f.Content.Text:SetJustifyH("LEFT")
+
+
+
+	return f
 end
 
-function Resell.GUI:ContentFrame(txt, offx, offy)
-	local tf = CreateFrame("Frame", nil, Resell.GUI.Component.Container)
-	tf:SetSize(156, 22)
-	tf:SetPoint("TOPRIGHT", Resell.GUI.Component.Container, "TOPRIGHT", offx, offy)
-	tf.Text = tf:CreateFontString("FrizQT")
-	tf.Text:SetPoint("LEFT", tf, "LEFT")
-	tf.Text:SetFont( "fonts/frizqt__.ttf", 11 )
-
-	tf.Text:SetJustifyH("LEFT")
-	tf.Text:SetJustifyV("TOP")
-	tf.Text:SetText(txt)
-	return tf
-end
 
 function Resell:TRADE_SKILL_CLOSE()
 	self.tradeSkillOpen = false
@@ -340,8 +417,9 @@ function Resell:OnSkillChange()
 		local reagentList = {}
 		for i = 1,GetTradeSkillNumReagents(skillIndex)
 		do
-			local name, _, count = GetTradeSkillReagentInfo(skillIndex, i)
+			local name, texture, count = GetTradeSkillReagentInfo(skillIndex, i)
 			reagentList[name] = count
+			-- Resell:Print(texture)
 		end			
 		local realCraftCost, marketCraftCost = Resell:CalculateCraftCost(reagentList)
 
