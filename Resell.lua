@@ -139,9 +139,10 @@ function Resell.GUI.InitializeComponents()
 
 	-- store frames for profit panel items
 	Resell.GUI.profitItemFrames = {}
+	Resell.GUI.reagentItemFrames = {}
 	
 	Resell.GUI.Component.Container = CreateFrame("Frame", nil, TradeSkillFrame)
-	Resell.GUI.Component.Container:SetSize(width, height / 4)
+	Resell.GUI.Component.Container:SetSize(width + 32, height / 4)
 	Resell.GUI.Component.Container:SetPoint("LEFT", TradeSkillFrame, "RIGHT", 0, 0)
 
 	Resell.GUI.Component.Container:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", tile = true, tileSize = 8, edgeSize = 12, insets = { left = 2, right = 2, top = 2, bottom = 2 } });
@@ -149,19 +150,10 @@ function Resell.GUI.InitializeComponents()
 	Resell.GUI.Component.Container:SetBackdropBorderColor(0.1,0.1,0.1,1);
 
 	Resell.GUI:CreateProfitPanelFrames(numRows)
-
-
-
-	-- Resell.GUI.Component.ItemContainer = CreateFrame("Frame", nil, Resell.GUI.Component.Container)
-	-- Resell.GUI.Component.ItemContainer:SetSize((width / 2) - containerPl, 84)
-	-- Resell.GUI.Component.ItemContainer:SetPoint("RIGHT", Resell.GUI.Component.Container, "RIGHT", containerPl, 0)
-
-	-- Resell.GUI:CreateItemFrames()
-
-
+	Resell.GUI:CreateItemFrames(numRows)
 end
 
-function Resell.GUI:CreateProfitPanelFrames(nRows)
+function Resell.GUI:CreateProfitPanelFrames(numRows)
 	local f = CreateFrame("Frame", nil, self.Component.Container)
 	local containerWidth, containerHeight = self.Component.Container:GetSize()
 	
@@ -172,13 +164,13 @@ function Resell.GUI:CreateProfitPanelFrames(nRows)
 	local offy = 0;
 	
 	
-	local labels = {"On Auction House: ", "Real Craft Cost: ", "Market Craft Cost ", "Profit: "}
+	local labels = {"On Auction House: ", "Real Craft Cost: ", "Market Craft Cost: ", "Profit: "}
 	
 	local profitPanelWidth, profitPanelHeight = f:GetSize()
-	local rowHeight = profitPanelHeight / nRows
+	local rowHeight = profitPanelHeight / numRows
 
 	
-	for i = 0, nRows - 1
+	for i = 0, numRows - 1
 	do	
 		if labels[i + 1] then			
 			offy = -rowHeight * i
@@ -191,43 +183,79 @@ function Resell.GUI:CreateProfitPanelFrames(nRows)
 		end
 	end
 
+	return f
 end
 
-function Resell.GUI:CreateItemFrames()
-	local nRows = 5
-	local rowHeight = 22
-	for i = 0, nRows
-	do
-		local offx = 0
-		local offy = rowHeight * i
-		self:ItemFrame(nil, "Reagent "..i, Resell:GetMoneyString(0), 0, self.Component.ItemContainer, offx, offy)
+function Resell.GUI:CreateItemFrames(numRows)
+	local f = CreateFrame("Frame", nil, self.Component.Container)
+	local containerWidth, containerHeight = self.Component.Container:GetSize()
+	
+	f:SetSize(containerWidth / 2, containerHeight)
+	f:SetPoint("RIGHT", self.Component.Container, "RIGHT")
+
+	local offx = 0;
+	local offy = 0;	
+	
+	local w, h = f:GetSize()
+	local rowHeight = h / numRows
+
+	
+	for i = 0, numRows - 1
+	do	
+				
+		offy = -rowHeight * i
+
+		local itemFrame = self.Component:ItemFrame(w, rowHeight, nil, "Reagent "..i+1, "0", Resell:GetMoneyString(0))
+		itemFrame:SetParent(f)
+		itemFrame:SetPoint("TOPLEFT", f, "TOPLEFT", offx, offy)
+		
+		table.insert(self.reagentItemFrames, itemFrame)
+
 	end
 end
 
-function Resell.GUI:ItemFrame(texture, itemName, price, count, parent, offx, offy)
-
+function Resell.GUI.Component:ItemFrame(width, height, texture, reagentName, playerItemCount, price)
 	if not texture then
 		texture = "Interface\\BUTTONS\\UI-EmptySlot.blp"
 	end
-
-	local f	= CreateFrame("Frame", nil, parent)
-	local parentX, parentY = parent:GetSize()
 	
-	f:SetSize(parentX, 22)
-	f:SetPoint("LEFT", parent, "LEFT", offx, offy)
-	local iconX, iconY = 18, 18
+	local f	= CreateFrame("Frame")
+	f:SetSize(width, height)	
+		
 	f.Icon = CreateFrame("Frame", nil, f)
-	f.Icon:SetSize(iconX, iconY)
+	f.Icon:SetSize(height - 2, height - 2)
 	f.Icon:SetPoint("LEFT", f, "LEFT")
-	f.Icon:SetBackdrop({ bgFile = texture, edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", tile = false, tileSize = 8, edgeSize = 12, insets = { left = 2, right = 2, top = 2, bottom = 2 } })
+	f.Icon:SetBackdrop({ bgFile = texture, edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", tile = false, tileSize = 8, edgeSize = 12, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+
+	local iconW, iconH = f.Icon:GetSize()
+
+	local remainingWidth = width - iconW	
+
+	f.Name = self:TextFrame(reagentName)
+	f.Name:SetParent(f)
+	f.Name:SetSize(remainingWidth / 2, height)
+	f.Name:SetPoint("LEFT", f.Icon, "RIGHT")
+	f.Name.Text:SetJustifyH("LEFT")	
+	local nameW, nameH = f.Name:GetSize()
 
 
-	f.Content = CreateFrame("Frame", nil, f)
-	f.Content:SetSize(parentX - iconX, 18)
-	f.Content:SetPoint("RIGHT", f, "RIGHT")
-	f.Content.Label = Resell.GUI:LabelFrame(itemName.." - "..price.." x ", f.Content, 0, 0)
-	f.Content.Count = Resell.GUI:ContentFrame(count, f.Content, 0, 0)
+	f.Count = self:TextFrame(" x "..playerItemCount)
+	f.Count:SetParent(f)
+	f.Count:SetSize(remainingWidth / 6, height)
+	f.Count:SetPoint("LEFT", f.Name, "RIGHT")
+	f.Count.Text:SetJustifyH("LEFT")	
 
+	
+	local countW, countH = f.Count:GetSize()
+	
+	f.Price = self:TextFrame(price)
+	f.Price:SetParent(f)
+	f.Price:SetSize(remainingWidth / 3, height)
+	f.Price:SetPoint("LEFT", f.Count, "RIGHT")
+	f.Price.Text:SetJustifyH("LEFT")	
+
+
+	return f
 end
 
 function Resell.GUI.Component:TextFrame(txt)
@@ -409,17 +437,36 @@ function Resell:OnSkillChange()
 	if Resell.tradeSkillOpen then
 
 		local skillIndex = GetTradeSkillSelectionIndex()
+		local minMade, maxMade = GetTradeSkillNumMade(skillIndex)
+		
 
 		if skillIndex == 0 then return end
 
 		local itemName = GetItemInfo(GetTradeSkillItemLink(skillIndex))
 
 		local reagentList = {}
+
+		for i = 1,#Resell.GUI.reagentItemFrames
+		do
+			Resell.GUI.reagentItemFrames[i]:Hide()
+		end
+
 		for i = 1,GetTradeSkillNumReagents(skillIndex)
 		do
 			local name, texture, count = GetTradeSkillReagentInfo(skillIndex, i)
 			reagentList[name] = count
-			-- Resell:Print(texture)
+			
+			if not Resell.db.global.ResellItemDatabase[name] then
+				Resell.UTILS.InitItem(name)
+			end
+
+			local f = Resell.GUI.reagentItemFrames[i]
+			f.Icon:SetBackdrop({ bgFile = texture })
+			f.Name.Text:SetText(name)
+			f.Count.Text:SetText(" x "..Resell.db.global.ResellItemDatabase[name].playerItemCount)
+			f.Price.Text:SetText(Resell:GetMoneyString(Resell.db.global.ResellItemDatabase[name].price))
+
+			f:Show()
 		end			
 		local realCraftCost, marketCraftCost = Resell:CalculateCraftCost(reagentList)
 
