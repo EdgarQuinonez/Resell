@@ -12,13 +12,13 @@ local gRs_TradeSkill_Reagents;
 local gRs_TradeSkill_ProductName;
 
 -- Flags
-Resell.atAuctionHouse = false
 local auctionHouseFirstShown = true
 
 
 Resell = LibStub("AceAddon-3.0"):NewAddon("Resell", "AceConsole-3.0", "AceEvent-3.0", "AceTimer-3.0")
 
 Resell.tradeSkillOpen= false
+Resell.atAuctionHouse = false
 
 
 -- available classes
@@ -27,6 +27,7 @@ Resell.Inventory = {}
 Resell.UTILS = {}
 Resell.GUI = {}
 Resell.GUI.Component = {}
+
 
 Resell.CONSTANT = {
 	INVENTORY = {
