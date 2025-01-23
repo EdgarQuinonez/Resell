@@ -355,9 +355,12 @@ function Resell:AUCTION_HOUSE_SHOW()
 		-- Resell:Atr_CreateAuctionButton_OnClick_Listener()
 		auctionHouseFirstShown = false
 	end
-
-	Resell.GUI.Component.Container:ClearAllPoints()
-	Resell.GUI.Component.Container:SetPoint("TOPRIGHT", TradeSkillFrame, "BOTTOMLEFT")
+	if Resell.tradeSkillOpen then			
+		-- update tooltip position
+		Resell.GUI.Component.Container:ClearAllPoints()
+		Resell.GUI.Component.Container:SetPoint("TOPRIGHT", TradeSkillFrame, "BOTTOMLEFT")
+	end
+	
 end
 
 function Resell:AUCTION_HOUSE_CLOSED(event)
@@ -369,9 +372,11 @@ function Resell:AUCTION_HOUSE_CLOSED(event)
 			Resell.DBOperation.UpdateItem(itemName, v.count, 1, v.price)
 		end
 
-		-- update tooltip position
-		Resell.GUI.Component.Container:ClearAllPoints()
-		Resell.GUI.Component.Container:SetPoint("LEFT", TradeSkillFrame, "RIGHT", 0, 0)
+		if Resell.tradeSkillOpen then			
+			-- update tooltip position
+			Resell.GUI.Component.Container:ClearAllPoints()
+			Resell.GUI.Component.Container:SetPoint("LEFT", TradeSkillFrame, "RIGHT", 0, 0)
+		end
 
 	end, 0.005)
 
