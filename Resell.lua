@@ -10,13 +10,11 @@ local gRs_Buy_ItemSession;
 
 local gRs_TradeSkill_Reagents;
 local gRs_TradeSkill_ProductName;
-local gRs_TradeSkill_NumMade;
 
 -- Flags
-local tradeSkillFirstShown = true
+Resell.atAuctionHouse = false
 local auctionHouseFirstShown = true
 
-local tradeSkillLoaded = false
 
 Resell = LibStub("AceAddon-3.0"):NewAddon("Resell", "AceConsole-3.0", "AceEvent-3.0", "AceTimer-3.0")
 
@@ -127,7 +125,15 @@ function Resell:ADDON_LOADED(event, name)
 end
 
 function Resell:TRADE_SKILL_SHOW()
-	self.tradeSkillOpen = true		
+	self.tradeSkillOpen = true
+	if Resell.atAuctionHouse then
+		Resell.GUI.Component.Container:ClearAllPoints()
+		Resell.GUI.Component.Container:SetPoint("TOPRIGHT", TradeSkillFrame, "BOTTOMLEFT")
+	else
+		Resell.GUI.Component.Container:ClearAllPoints()
+		Resell.GUI.Component.Container:SetPoint("LEFT", TradeSkillFrame, "RIGHT", 0, 0)
+	end
+	-- Resell.GUI.Component.Container:Show()
 end
 
 function Resell:InitializeGUI()
@@ -348,6 +354,7 @@ function Resell.UTILS.CopyTable(from, to)
 end
 
 function Resell:AUCTION_HOUSE_SHOW()
+	Resell.atAuctionHouse = true
 	-- start shopping session
 	gRs_Buy_ItemSession = {}	
 	if auctionHouseFirstShown then		
@@ -364,6 +371,7 @@ function Resell:AUCTION_HOUSE_SHOW()
 end
 
 function Resell:AUCTION_HOUSE_CLOSED(event)
+	Resell.atAuctionHouse = false
 	Resell.gRs_lastEventUpdate[event] = GetTime()
 	-- end shopping session
 	Resell.UTILS.DebouncedEvent(event, function ()
