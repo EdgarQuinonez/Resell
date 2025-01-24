@@ -59,6 +59,20 @@ local defaults = {
 	global = {
 		["ResellItemDatabase"] = {},
 		["ResellTradeSkillSkillsDatabase"] = {},
+		["ResellSpecialCraftDatabase"] = {			
+			["Create Eternal Earth"] = {},
+			["Create Eternal Fire"] = {},
+			["Create Eternal Shadow"] = {},
+			["Create Eternal Water"] = {},
+			["Create Eternal Life"] = {},
+			["Create Eternal Air"] = {},
+			["Crystallized Earth"] = {},
+			["Crystallized Fire"] = {},
+			["Crystallized Shadow"] = {},
+			["Crystallized Water"] = {},
+			["Crystallized Life"] = {},
+			["Crystallized Air"] = {},
+		},
 		["GUILDBANK"] = {}
 	},
 	char = {
@@ -553,6 +567,27 @@ function Resell:RegisterCraft()
 	Resell.DBOperation.RegisterCraft()
 end
 
+-- returns 
+function Resell.UTILS.GetProductAndReagentsFromChanges()
+	if type(Resell.gRs_latestChanges) ~= "table" then return end
+	local products = {}
+	local productCount = 0 -- single count because craft cost will be split equally between products because they come from the same craft/container
+	local reagents = {}
+	
+
+	for itemName, count in pairs(Resell.gRs_latestChanges)
+	do
+		if count > 0 then
+			products[itemName] = count
+			productCount = productCount + count
+		else
+			reagents[itemName] = count
+		end	
+	end
+
+	return products, productCount, reagents
+end
+
 function Resell.DBOperation.RegisterCraft()
 	if type(Resell.gRs_latestChanges) ~= "table" then return end
 
@@ -569,6 +604,25 @@ function Resell.DBOperation.RegisterCraft()
 		
 	if gRs_TradeSkill_ProductName and productCount > 0 then		
 		Resell.DBOperation.UpdateItem(gRs_TradeSkill_ProductName, productCount, 1, realCraftCost, false, realCraftCost, marketCraftCost)
+	end
+end
+
+function Resell:RegisterSpecialCraft()
+	Resell.DBOperation.RegisterSpecialCraft()
+end
+
+function Resell.DBOperation.RegisterSpecialCraft()
+	if type(Resell.gRs_latestChanges) ~= "table" then return end
+
+	local productList, productCount, reagentList = Resell.UTILS.GetProductAndReagentsFromChanges()
+
+	if type(productList) ~= "table" or type(reagentList) ~= "table" then return end
+
+	local craftCost = Resell:CalculateCraftCost(reagentList, productCount)
+
+	for productName, count in pairs(productList) 
+	do		
+		Resell.DBOperation.UpdateItem(productName, count, 1, craftCost, false)
 	end
 end
 
@@ -649,10 +703,19 @@ function Resell:UNIT_SPELLCAST_SENT(event, unit, name)
 	end
 end
 
+
 function Resell:UNIT_SPELLCAST_SUCCEEDED(event, unit, name)
+
+	Resell.gRs_lastEventUpdate[event] = GetTime()
 	-- Filters names to respond only on trade skill names.
 	if unit == "player" and Resell.db.global["ResellTradeSkillSkillsDatabase"][name] then
 		Resell:ScheduleTimer("RegisterCraft", 0.7) -- small delay to allow gRs_latestChanges be updated first even if BAG_UPDATE happens after the UNIT_SPELLCAST_SUCCEEDED event
+	end
+
+	if unit == "player" and Resell.db.global["ResellSpecialCraftDatabase"][name] then
+		Resell.UTILS.DebouncedEvent(event, function ()			
+			Resell:ScheduleTimer("RegisterSpecialCraft", 0.7)
+		end, 0.35)
 	end
 end
 
@@ -662,6 +725,7 @@ end
 
 function Resell:OnLoot()
 	local container;
+	local containerCount = 0;
 	local price = 0;
 	local totalCount = 0;		
 	-- find container		
@@ -669,6 +733,7 @@ function Resell:OnLoot()
 	do
 		if count < 0 then
 			container = name
+			containerCount = abs(containerCount + count)
 		else
 			totalCount = totalCount + count
 		end
@@ -679,7 +744,7 @@ function Resell:OnLoot()
 	end
 
 	if container then			
-		price = Resell.db.global.ResellItemDatabase[container].price
+		price = Resell.db.global.ResellItemDatabase[container].price * containerCount
 	end
 
 	if totalCount == 0 then
@@ -701,8 +766,7 @@ function Resell:LOOT_SLOT_CLEARED(event, lootSlot)
 	
 	Resell.gRs_lastEventUpdate[event] = GetTime()
 	
-	Resell.UTILS.DebouncedEvent(event, function ()
-		Resell:Print("OnLoot fired!")		
+	Resell.UTILS.DebouncedEvent(event, function ()		
 		Resell:ScheduleTimer("OnLoot", 0.7)
 	end, 0.005)
 end
