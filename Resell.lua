@@ -466,7 +466,7 @@ function Resell:CalculateCraftCost(reagentList, numMade)
 		if not Resell.db.global.ResellItemDatabase[name] then Resell.UTILS.InitItem(name) end
 
 		realCraftCost = realCraftCost + Resell.db.global.ResellItemDatabase[name].price * count
-		marketCraftCost = marketCraftCost + Resell.db.global.ResellItemDatabase[name].scannedPrice * count
+		marketCraftCost = marketCraftCost + (GetItemScannedPrice(name) or 0)* count
 	end
 
 	return realCraftCost / numMade, marketCraftCost / numMade
@@ -654,6 +654,10 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, update
 		price = itemTable[itemName].price
 	end
 
+	if price == 0 then
+		price = GetItemScannedPrice(itemName) or 0
+	end
+
 	if realCraftCost then
 		itemTable[itemName].realCraftCost = realCraftCost
 	end
@@ -664,6 +668,10 @@ function Resell.DBOperation.UpdateItem(itemName, count, stackSize, price, update
 
 	local previousCount = itemTable[itemName]["playerItemCount"]
 	local previousPrice = itemTable[itemName]["price"]
+
+	if previousPrice == 0 then
+		previousPrice = GetItemScannedPrice(itemName) or 0
+	end
 
 	local newCount = previousCount + count * stackSize
 
