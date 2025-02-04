@@ -162,10 +162,31 @@ end
 
 function Resell:GUILDBANKFRAME_OPENED()
     self.atGuildBank = true
+
+    if Resell.tradeSkillOpen then			
+		-- update tooltip position
+		Resell.GUI.Component.Container:ClearAllPoints()
+		Resell.GUI.Component.Container:SetPoint("TOPRIGHT", TradeSkillFrame, "BOTTOMLEFT")
+	end	
+    if Resell.GUI.ExtractButton then                
+        Resell.GUI.ExtractButton:Show()
+    end
+
 end
 
 function Resell:GUILDBANKFRAME_CLOSED()
     self.atGuildBank = false
+
+    if Resell.tradeSkillOpen then			
+        -- update tooltip position
+        Resell.GUI.Component.Container:ClearAllPoints()
+        Resell.GUI.Component.Container:SetPoint("LEFT", TradeSkillFrame, "RIGHT", 0, 0)
+    end
+
+    if Resell.GUI.ExtractButton then        
+        Resell.GUI.ExtractButton:Hide()
+    end
+    
 end
 
 function Resell:GUILDBANKBAGSLOTS_CHANGED(event)

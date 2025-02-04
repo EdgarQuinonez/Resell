@@ -19,6 +19,7 @@ Resell = LibStub("AceAddon-3.0"):NewAddon("Resell", "AceConsole-3.0", "AceEvent-
 
 Resell.tradeSkillOpen= false
 Resell.atAuctionHouse = false
+Resell.atGuildBank = false
 
 
 -- available classes
@@ -123,8 +124,7 @@ function Resell:SetupHookFunctions()
 end
 
 function Resell:ADDON_LOADED(event, name)
-	if name == "Blizzard_TradeSkillUI" then
-		tradeSkillLoaded = true
+	if name == "Blizzard_TradeSkillUI" then		
 		Resell:InitializeGUI()
 		for i=1,GetNumTradeSkills()
 		do
@@ -141,7 +141,7 @@ end
 
 function Resell:TRADE_SKILL_SHOW()
 	self.tradeSkillOpen = true
-	if Resell.atAuctionHouse then
+	if Resell.atAuctionHouse or Resell.atGuildBank then
 		Resell.GUI.Component.Container:ClearAllPoints()
 		Resell.GUI.Component.Container:SetPoint("TOPRIGHT", TradeSkillFrame, "BOTTOMLEFT")
 	else
@@ -150,6 +150,8 @@ function Resell:TRADE_SKILL_SHOW()
 	end
 	-- Resell.GUI.Component.Container:Show()
 end
+
+
 
 function Resell:InitializeGUI()
 	Resell.GUI.InitializeComponents()
@@ -173,6 +175,25 @@ function Resell.GUI.InitializeComponents()
 
 	Resell.GUI:CreateProfitPanelFrames(numRows)
 	Resell.GUI:CreateItemFrames(numRows)
+	Resell.GUI.ExtractButton = Resell.GUI:CreateExtractButton()
+
+
+end
+
+function Resell.GUI:CreateExtractButton()
+	local b = CreateFrame("Button", "ResellExtractMatsButton", self.Component.Container, "UIPanelButtonTemplate")
+	b:SetSize(80 ,22) -- width, height
+	b:SetText("Withdraw!")
+	b:SetPoint("BOTTOM", self.Component.Container, "TOP", 0, 0)
+	b:SetScript("OnClick", function()
+		Resell:WithdrawMatsFromGuildBank()
+	end)
+
+	if not Resell.atGuildBank then
+		b:Hide()
+	end
+
+	return b
 end
 
 function Resell.GUI:CreateProfitPanelFrames(numRows)
@@ -381,8 +402,7 @@ function Resell:AUCTION_HOUSE_SHOW()
 		-- update tooltip position
 		Resell.GUI.Component.Container:ClearAllPoints()
 		Resell.GUI.Component.Container:SetPoint("TOPRIGHT", TradeSkillFrame, "BOTTOMLEFT")
-	end
-	
+	end	
 end
 
 function Resell:AUCTION_HOUSE_CLOSED(event)
@@ -515,6 +535,108 @@ function Resell:OnSkillChange()
 			Resell.GUI.profitItemFrames[2].Content.Text:SetText(Resell:GetMoneyString(realCraftCost))
 			Resell.GUI.profitItemFrames[3].Content.Text:SetText(Resell:GetMoneyString(marketCraftCost))
 			Resell.GUI.profitItemFrames[4].Content.Text:SetText(Resell:GetMoneyString(Resell:GetProfit(ahPrice, marketCraftCost)))
+		end
+	end
+end
+
+function Resell:GetWithdrawReagentList()
+	local skillIndex = GetTradeSkillSelectionIndex()
+	local reagentList = {}
+
+	if skillIndex == 0 then return end
+
+	for reagentIndex = 1,GetTradeSkillNumReagents(skillIndex)
+	do
+		local reagentName, reagentTexture, reagentCount, playerReagentCount = GetTradeSkillReagentInfo(skillIndex, reagentIndex)
+		
+		if playerReagentCount < reagentCount then
+			table.insert(reagentList, {reagentName, reagentCount - playerReagentCount})
+		end
+	end
+
+	return reagentList
+end
+
+function Resell.UTILS.CalcGBDelay()
+	local down, up, lag = GetNetStats()
+    if lag > 0 then lag = (3*lag/1000) + 0.2      
+    else
+        lag = 0.35
+    end
+    return lag
+end
+
+function Resell:PickupOnContainerEmptySlot()
+    for i = 0,4
+    do
+        for j = 2,GetContainerNumSlots(i)
+        do
+            if not GetContainerItemID(i,j) then
+                PickupContainerItem(i,j)
+                break
+            end
+        end
+    end   
+end
+
+function Resell:DoWithdrawGuildBankReagent(args)
+	if type(args) ~= "table" then return end
+
+	local reagentList, currSlot = unpack(args)
+    local nSlots = 98
+
+	if type(reagentList) ~= "table" or type(currSlot) ~= "number" then return end -- wrong argument
+	if #reagentList == 0 then Resell:Print("Withdraw Done.") return end -- withdraw done
+	if currSlot > nSlots then Resell:Print("All slots done.") return end -- slots iterated
+
+
+    local currTab = GetCurrentGuildBankTab()
+    
+   
+	local itemLink = GetGuildBankItemLink(currTab, currSlot)
+	local texture, count, locked = GetGuildBankItemInfo(currTab, currSlot)
+	
+	if itemLink then            
+		local itemName = GetItemInfo(itemLink)
+		
+		for i = 1, #reagentList
+		do
+
+			local reagentName, reagentCount = unpack(reagentList[i])
+			if reagentName == itemName then
+				-- match
+				if reagentCount <= count then
+					-- stack is big enough					
+					SplitGuildBankItem(currTab, currSlot, reagentCount)
+					Resell:PickupOnContainerEmptySlot()
+					table.remove(reagentList, i)
+				else
+					-- take the whole stack, subtract from reagentList
+					AutoStoreGuildBankItem(currTab, currSlot)
+					reagentCount = reagentCount - count
+					reagentList[i] = {reagentName, reagentCount}
+				end
+
+				Resell:ScheduleTimer("DoWithdrawGuildBankReagent", Resell.UTILS.CalcGBDelay(), {reagentList, currSlot + 1})
+				return
+			end                                      
+		end
+		-- not empty, no match
+		Resell:DoWithdrawGuildBankReagent({reagentList, currSlot + 1})
+	else
+		-- empty
+		Resell:DoWithdrawGuildBankReagent({reagentList, currSlot + 1})
+	end
+     
+end
+
+function Resell:WithdrawMatsFromGuildBank()
+	if Resell.atGuildBank then
+		
+		local reagentList = Resell:GetWithdrawReagentList()
+	
+		if type(reagentList) == "table" then		
+			Resell:DoWithdrawGuildBankReagent({reagentList, 1})    
 		end
 	end
 end
