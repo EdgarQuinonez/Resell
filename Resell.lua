@@ -124,7 +124,10 @@ function Resell:SetupHookFunctions()
 end
 
 function Resell:ADDON_LOADED(event, name)
-	if name == "Blizzard_TradeSkillUI" then		
+	
+	if name == "Blizzard_TradeSkillUI" then
+		
+		AuctionFrame_LoadUI() -- apparently only after auction ui loads the guildbankframe and tradeskillframe coexists 
 		Resell:InitializeGUI()
 		for i=1,GetNumTradeSkills()
 		do
@@ -175,23 +178,39 @@ function Resell.GUI.InitializeComponents()
 
 	Resell.GUI:CreateProfitPanelFrames(numRows)
 	Resell.GUI:CreateItemFrames(numRows)
-	Resell.GUI.ExtractButton = Resell.GUI:CreateExtractButton()
 
+	Resell.GUI.Component.ExtractButtonsContainer = CreateFrame("Frame", nil, Resell.GUI.Component.Container)
+	Resell.GUI.Component.ExtractButtonsContainer:SetSize(200, 22)
+	Resell.GUI.Component.ExtractButtonsContainer:SetPoint("BOTTOM", Resell.GUI.Component.Container, "TOP")
 
+	Resell.GUI.Component.ExtractButton = Resell.GUI:CreateExtractButton()
+	Resell.GUI.Component.CompleteExtractButton = Resell.GUI:CreateCompleteExtractButton()
+
+	if not Resell.atGuildBank then
+		Resell.GUI.Component.ExtractButtonsContainer:Hide()
+	end
 end
 
 function Resell.GUI:CreateExtractButton()
-	local b = CreateFrame("Button", "ResellExtractMatsButton", self.Component.Container, "UIPanelButtonTemplate")
+	local b = CreateFrame("Button", "ResellExtractMatsButton", self.Component.ExtractButtonsContainer, "UIPanelButtonTemplate")
 	b:SetSize(80 ,22) -- width, height
 	b:SetText("Withdraw!")
-	b:SetPoint("BOTTOM", self.Component.Container, "TOP", 0, 0)
+	b:SetPoint("LEFT", self.Component.ExtractButtonsContainer, "LEFT", 0, 0)
 	b:SetScript("OnClick", function()
 		Resell:WithdrawMatsFromGuildBank()
 	end)
 
-	if not Resell.atGuildBank then
-		b:Hide()
-	end
+	return b
+end
+
+function Resell.GUI:CreateCompleteExtractButton()
+	local b = CreateFrame("Button", "ResellCompleteExtractMatsButton", self.Component.ExtractButtonsContainer, "UIPanelButtonTemplate")
+	b:SetSize(80 ,22) -- width, height
+	b:SetText("Complete!")
+	b:SetPoint("LEFT", self.Component.ExtractButton, "RIGHT", 0, 0)
+	b:SetScript("OnClick", function()
+		Resell:CompleteMatsFromGuildBank()
+	end)
 
 	return b
 end
@@ -539,18 +558,27 @@ function Resell:OnSkillChange()
 	end
 end
 
-function Resell:GetWithdrawReagentList()
+-- extractionMode:
+-- - Full: Extract trade skill skill mats.
+-- - Complete (Default): Extract mats considering playercount.
+function Resell:GetWithdrawReagentList(extractionMode)
+
 	local skillIndex = GetTradeSkillSelectionIndex()
 	local reagentList = {}
 
 	if skillIndex == 0 then return end
+	if not extractionMode then extractionMode = "Complete" end
 
 	for reagentIndex = 1,GetTradeSkillNumReagents(skillIndex)
 	do
 		local reagentName, reagentTexture, reagentCount, playerReagentCount = GetTradeSkillReagentInfo(skillIndex, reagentIndex)
 		
-		if playerReagentCount < reagentCount then
-			table.insert(reagentList, {reagentName, reagentCount - playerReagentCount})
+		if extractionMode == "Full" then
+			table.insert(reagentList, {reagentName, reagentCount})			
+		elseif extractionMode == "Complete" then
+			if playerReagentCount < reagentCount then
+				table.insert(reagentList, {reagentName, reagentCount - playerReagentCount})
+			end
 		end
 	end
 
@@ -630,11 +658,21 @@ function Resell:DoWithdrawGuildBankReagent(args)
      
 end
 
-function Resell:WithdrawMatsFromGuildBank()
+function Resell:CompleteMatsFromGuildBank()
 	if Resell.atGuildBank then
 		
 		local reagentList = Resell:GetWithdrawReagentList()
 	
+		if type(reagentList) == "table" then		
+			Resell:DoWithdrawGuildBankReagent({reagentList, 1})    
+		end
+	end
+end
+
+function Resell:WithdrawMatsFromGuildBank()
+	if Resell.atGuildBank then
+		local reagentList = Resell:GetWithdrawReagentList("Full")
+
 		if type(reagentList) == "table" then		
 			Resell:DoWithdrawGuildBankReagent({reagentList, 1})    
 		end

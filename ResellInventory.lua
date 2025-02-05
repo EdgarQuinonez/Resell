@@ -168,8 +168,8 @@ function Resell:GUILDBANKFRAME_OPENED()
 		Resell.GUI.Component.Container:ClearAllPoints()
 		Resell.GUI.Component.Container:SetPoint("TOPRIGHT", TradeSkillFrame, "BOTTOMLEFT")
 	end	
-    if Resell.GUI.ExtractButton then                
-        Resell.GUI.ExtractButton:Show()
+    if Resell.GUI.Component.ExtractButtonsContainer then                
+        Resell.GUI.Component.ExtractButtonsContainer:Show()
     end
 
 end
@@ -183,8 +183,8 @@ function Resell:GUILDBANKFRAME_CLOSED()
         Resell.GUI.Component.Container:SetPoint("LEFT", TradeSkillFrame, "RIGHT", 0, 0)
     end
 
-    if Resell.GUI.ExtractButton then        
-        Resell.GUI.ExtractButton:Hide()
+    if Resell.GUI.Component.ExtractButtonsContainer then                
+        Resell.GUI.Component.ExtractButtonsContainer:Hide()
     end
     
 end
